@@ -10,6 +10,7 @@ import {
   ImagePlus,
   Loader2,
   Lock,
+  Palette,
   SlidersHorizontal,
   Sparkles,
   Unlock,
@@ -31,6 +32,7 @@ export interface ComposerSubmitPayload {
   steps: number;
   cfgScale: number;
   seed: number;
+  takeCount: 1 | 2 | 4;
   startFrameDataUrl?: string;
   endFrameDataUrl?: string;
 }
@@ -72,6 +74,15 @@ const CAMERA_PRESETS = [
   { label: 'Slow Mo', snippet: 'silky cinematic slow motion 60fps' },
 ];
 
+const STYLE_PRESETS = [
+  { label: '35mm Cinema', snippet: 'shot on 35mm Kodak Vision3 film, anamorphic lens flare, subtle film grain, golden rim lighting' },
+  { label: 'Anime Film', snippet: 'theatrical Japanese anime feature film style, luminous sky lighting, crisp hand-drawn cel shading' },
+  { label: 'Cyberpunk Noir', snippet: 'neon-drenched cyberpunk noir cinematography, wet asphalt reflections, volumetric rain, teal and magenta' },
+  { label: 'Photoreal Doc', snippet: 'ultra-photorealistic 85mm documentary photography, authentic skin texture, natural available light' },
+  { label: '3D Cinema', snippet: 'stylized theatrical 3D animated feature film render, soft subsurface scattering, lush volumetric lighting' },
+  { label: 'Retro VHS', snippet: '1990s analog camcorder VHS cinema aesthetic, warm halation, soft lens bloom, nostalgic tones' },
+];
+
 export function FloatingComposer({
   prompt,
   onPromptChange,
@@ -99,6 +110,8 @@ export function FloatingComposer({
   const [cfgScale, setCfgScale] = useState(6.5);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCameraBar, setShowCameraBar] = useState(false);
+  const [showStyleBar, setShowStyleBar] = useState(false);
+  const [takeCount, setTakeCount] = useState<1 | 2 | 4>(1);
   const [showExpandedPreview, setShowExpandedPreview] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
 
@@ -144,6 +157,7 @@ export function FloatingComposer({
       steps,
       cfgScale,
       seed: effectiveSeed,
+      takeCount,
       startFrameDataUrl:
         mode === 'i2v' ? startFrameDataUrl ?? compiled.suggestedRefImage : undefined,
       endFrameDataUrl: mode === 'i2v' ? endFrameDataUrl : undefined,
@@ -456,6 +470,25 @@ export function FloatingComposer({
             </div>
           )}
 
+          {/* 1-Click Cinema Style / Look Presets Drawer ($0) */}
+          {showStyleBar && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 px-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+                Look:
+              </span>
+              {STYLE_PRESETS.map((st) => (
+                <button
+                  key={st.label}
+                  type="button"
+                  onClick={() => appendText(st.snippet)}
+                  className="px-2.5 py-0.5 rounded-full text-[11px] bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-emerald-500/40 hover:text-emerald-200 shrink-0 transition"
+                >
+                  + {st.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Bible Expansion Indicator */}
           {compiled.appliedTags.length > 0 && (
             <div className="text-[11px] bg-amber-500/8 border border-amber-500/20 rounded-xl px-2.5 py-1.5 text-amber-200/90">
@@ -499,6 +532,20 @@ export function FloatingComposer({
                 <option value="21:9">21:9 Anamorphic</option>
               </select>
 
+              {/* Multi-Take Batch Variations (1x / 2x / 4x — $0) */}
+              <select
+                aria-label="Takes"
+                data-testid="take-count-select"
+                value={takeCount}
+                onChange={(e) => setTakeCount(Number(e.target.value) as 1 | 2 | 4)}
+                title="Generate multiple seed variations in one click ($0)"
+                className="px-2 py-1 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none hover:border-zinc-700 cursor-pointer"
+              >
+                <option value={1}>1× Take</option>
+                <option value={2}>2× Takes</option>
+                <option value={4}>4× Takes</option>
+              </select>
+
               {/* Duration (Video modes) */}
               {mode !== 't2i' && (
                 <select
@@ -513,8 +560,8 @@ export function FloatingComposer({
                   <option value={6}>6s</option>
                   <option value={8}>8s</option>
                   <option value={10}>10s</option>
-                  <option value={12}>12s (Omni 1.2)</option>
-                  <option value={15}>15s (Omni 1.2)</option>
+                  {isOmniVideo && <option value={12}>12s</option>}
+                  {isOmniVideo && <option value={15}>15s</option>}
                 </select>
               )}
 
@@ -533,6 +580,21 @@ export function FloatingComposer({
                   <Wand2 className="w-3 h-3 text-amber-400" />
                 )}
                 <span>Enhance</span>
+              </button>
+
+              {/* Cinema Look / Style Presets Toggle */}
+              <button
+                type="button"
+                data-testid="toggle-style-presets-btn"
+                onClick={() => setShowStyleBar((v) => !v)}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition ${
+                  showStyleBar
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                }`}
+              >
+                <Palette className="w-3 h-3" />
+                <span>Look</span>
               </button>
 
               {/* Camera Motion Presets Toggle */}
@@ -565,21 +627,27 @@ export function FloatingComposer({
                 {seedLocked && <Lock className="w-2.5 h-2.5 text-amber-400" />}
               </button>
 
-              {/* Native Audio Status Badge (Omni 1.2 & Seedance 2.5) */}
-              {(isOmniVideo || (isSeedanceVideo && engineSettings.seedanceAudio)) && (
-                <span
-                  className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border ${
-                    isOmniVideo
-                      ? 'bg-sky-500/15 border-sky-500/30 text-sky-200'
-                      : 'bg-violet-500/15 border-violet-500/30 text-violet-200'
-                  }`}
-                >
-                  <Volume2
-                    className={`w-3 h-3 ${isOmniVideo ? 'text-sky-400' : 'text-violet-400'}`}
-                  />
-                  Audio ON
-                </span>
-              )}
+              {/* Synced Audio Status Badge ($0 MMAudio Foley OR Omni 1.2 / Seedance 2.5) */}
+              {mode !== 't2i' &&
+                (engineSettings.activeEngine === 'free-24-7' && engineSettings.freeAutoAudio ? (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border bg-emerald-500/15 border-emerald-500/30 text-emerald-200">
+                    <Volume2 className="w-3 h-3 text-emerald-400" />
+                    AI Foley ($0)
+                  </span>
+                ) : isOmniVideo || (isSeedanceVideo && engineSettings.seedanceAudio) ? (
+                  <span
+                    className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border ${
+                      isOmniVideo
+                        ? 'bg-sky-500/15 border-sky-500/30 text-sky-200'
+                        : 'bg-violet-500/15 border-violet-500/30 text-violet-200'
+                    }`}
+                  >
+                    <Volume2
+                      className={`w-3 h-3 ${isOmniVideo ? 'text-sky-400' : 'text-violet-400'}`}
+                    />
+                    Audio ON
+                  </span>
+                ) : null)}
             </div>
 
             <div className="flex items-center gap-2">
@@ -603,12 +671,16 @@ export function FloatingComposer({
               >
                 <span>
                   {mode === 't2i'
-                    ? 'Generate Still ($0)'
+                    ? takeCount > 1
+                      ? `Generate ${takeCount}× Stills ($0)`
+                      : 'Generate Still ($0)'
                     : isOmniVideo
                     ? 'Generate Omni 1.2'
                     : isSeedanceVideo
                     ? 'Generate Seedance'
-                    : 'Generate Video'}
+                    : takeCount > 1
+                    ? `Generate ${takeCount}× Videos ($0)`
+                    : 'Generate Video ($0)'}
                 </span>
                 <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>

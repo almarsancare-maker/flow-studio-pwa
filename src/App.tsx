@@ -35,6 +35,7 @@ import {
   pingColabBackend,
   runImageGeneration,
   runVideoGeneration,
+  synthesizeSyncedVideoAudio,
   type ColabHealthStatus,
   type ServerKeyCapabilities,
 } from './services/engine';
@@ -341,6 +342,7 @@ export default function App() {
           seed: result.seed,
           thumbnailDataUrl: thumb,
           omniInteractionId: result.omniInteractionId ?? current.omniInteractionId,
+          hasSyncedAudio: result.hasSyncedAudio ?? current.hasSyncedAudio,
           completedAt: Date.now(),
         };
         await updateShotState(doneShot);
@@ -410,63 +412,75 @@ export default function App() {
     const compiled = compilePromptWithBible(payload.rawPrompt, bible);
     const kind = payload.mode === 't2i' ? 'image' : 'video';
     const [width, height] = ASPECT_DIMENSIONS[payload.aspectRatio][kind];
+    const takeCount = payload.takeCount || 1;
+    const baseTime = Date.now();
+    const refImgs = bible
+      .filter((b) => compiled.appliedTags.includes(b.tag) && b.refImageDataUrl)
+      .map((b) => b.refImageDataUrl as string)
+      .slice(0, 4);
 
-    const newShot: MediaShot = {
-      id: makeId('shot'),
-      projectId: activeProjectId,
-      label: nextShotLabel(),
-      kind,
-      mode: payload.mode,
-      status: 'queued',
-      progress: 5,
-      phase: 'Queued...',
-      rawPrompt: payload.rawPrompt,
-      compiledPrompt: compiled.compiledPrompt,
-      negativePrompt: payload.negativePrompt,
-      appliedTags: compiled.appliedTags,
-      aspectRatio: payload.aspectRatio,
-      width,
-      height,
-      durationSec: payload.durationSec,
-      fps: 24,
-      steps: payload.steps,
-      cfgScale: payload.cfgScale,
-      seed: payload.seed,
-      engine: engineSettings.activeEngine,
-      model:
-        engineSettings.activeEngine === 'gemini-omni'
-          ? kind === 'image'
-            ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
-            : `Gemini Omni 1.2 (${engineSettings.omniResolution})`
-          : engineSettings.activeEngine === 'seedance-byok'
-          ? kind === 'image'
-            ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
-            : `Seedance (${engineSettings.seedanceResolution})`
-          : engineSettings.activeEngine === 'colab-t4'
-          ? kind === 'image'
-            ? engineSettings.colabModelImage
-            : engineSettings.colabModelVideo
-          : kind === 'image'
-          ? `Free ${engineSettings.freeImageModel.toUpperCase()}`
-          : 'Free 24/7 Video',
-      startFrameDataUrl: payload.startFrameDataUrl,
-      endFrameDataUrl: payload.endFrameDataUrl,
-      referenceImages: bible
-        .filter((b) => compiled.appliedTags.includes(b.tag) && b.refImageDataUrl)
-        .map((b) => b.refImageDataUrl as string)
-        .slice(0, 4),
-      storyboardOrder: null,
-      createdAt: Date.now(),
-    };
+    const created: MediaShot[] = [];
+    for (let i = 0; i < takeCount; i++) {
+      const shotSeed = i === 0 ? payload.seed : (payload.seed + i * 7919) % 2_000_000_000;
+      const newShot: MediaShot = {
+        id: makeId(`shot${i}`),
+        projectId: activeProjectId,
+        label: nextShotLabel(),
+        kind,
+        mode: payload.mode,
+        status: 'queued',
+        progress: 5,
+        phase: takeCount > 1 ? `Queued Take ${i + 1}/${takeCount}...` : 'Queued...',
+        rawPrompt: payload.rawPrompt,
+        compiledPrompt: compiled.compiledPrompt,
+        negativePrompt: payload.negativePrompt,
+        appliedTags: compiled.appliedTags,
+        aspectRatio: payload.aspectRatio,
+        width,
+        height,
+        durationSec: payload.durationSec,
+        fps: 24,
+        steps: payload.steps,
+        cfgScale: payload.cfgScale,
+        seed: shotSeed,
+        engine: engineSettings.activeEngine,
+        model:
+          engineSettings.activeEngine === 'gemini-omni'
+            ? kind === 'image'
+              ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
+              : `Gemini Omni 1.2 (${engineSettings.omniResolution})`
+            : engineSettings.activeEngine === 'seedance-byok'
+            ? kind === 'image'
+              ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
+              : `Seedance (${engineSettings.seedanceResolution})`
+            : engineSettings.activeEngine === 'colab-t4'
+            ? kind === 'image'
+              ? engineSettings.colabModelImage
+              : engineSettings.colabModelVideo
+            : kind === 'image'
+            ? `Free ${engineSettings.freeImageModel.toUpperCase()}`
+            : 'Free 24/7 Video',
+        startFrameDataUrl: payload.startFrameDataUrl,
+        endFrameDataUrl: payload.endFrameDataUrl,
+        referenceImages: refImgs,
+        storyboardOrder: null,
+        createdAt: baseTime + i,
+      };
+      await saveShot(newShot);
+      created.push(newShot);
+    }
 
-    await saveShot(newShot);
-    setShots((prev) => [newShot, ...prev]);
+    setShots((prev) => [...created.reverse(), ...prev]);
     setPrompt('');
     if (payload.mode === 'i2v') {
       setStartFrameDataUrl(undefined);
       setEndFrameDataUrl(undefined);
     }
-    showToast(`Queued ${newShot.label} (${kind.toUpperCase()})`);
+    showToast(
+      takeCount > 1
+        ? `Queued ${takeCount}× ${kind.toUpperCase()} takes (${created.map((c) => c.label).join(', ')})`
+        : `Queued ${created[0].label} (${kind.toUpperCase()})`
+    );
   };
 
   const handleBulkScriptImport = async (parsedShots: ParsedScriptShot[]) => {
@@ -669,6 +683,130 @@ export default function App() {
     await saveShot(turnShot);
     setShots((prev) => [turnShot, ...prev]);
     showToast(`Queued Omni 1.2 ${turnAction} turn as ${turnShot.label}`);
+  };
+
+  const handleFreeDirectorTurn = async (
+    sourceShot: MediaShot,
+    turnPrompt: string,
+    turnAction: 'edit' | 'extend',
+    frameDataUrl?: string
+  ) => {
+    if (!activeProjectId) return;
+    const isExtend = turnAction === 'extend';
+    const nextKind: 'image' | 'video' = isExtend || sourceShot.kind === 'video' ? 'video' : 'image';
+    const nextMode: GenerationMode = nextKind === 'video' ? 'i2v' : 't2i';
+
+    // Preserve any Bible @TAGs from original shot when user writes a short edit directive
+    const missingTags = sourceShot.appliedTags.filter(
+      (t) => !turnPrompt.toUpperCase().includes(t.toUpperCase())
+    );
+    const mergedRaw =
+      nextKind === 'image'
+        ? `${sourceShot.rawPrompt}, ${turnPrompt}`
+        : missingTags.length > 0
+        ? `${turnPrompt} (${missingTags.join(' ')})`
+        : turnPrompt;
+    const compiled = compilePromptWithBible(mergedRaw, bible);
+    const [width, height] = ASPECT_DIMENSIONS[sourceShot.aspectRatio][nextKind];
+
+    // On +5s Extend Chain, auto-place both source & continuation into Storyboard Cut for seamless 15s–30s playback!
+    let nextStoryboardOrder: number | null = null;
+    if (isExtend) {
+      let maxOrder =
+        storyboardClips.length > 0
+          ? Math.max(...storyboardClips.map((c) => c.storyboardOrder ?? 0))
+          : 0;
+      if (sourceShot.storyboardOrder === null) {
+        maxOrder += 1;
+        await updateShotState({ ...sourceShot, storyboardOrder: maxOrder });
+      }
+      nextStoryboardOrder = maxOrder + 1;
+    }
+
+    let startFrame = frameDataUrl;
+    if (nextKind === 'video' && !startFrame && sourceShot.blobKey) {
+      const blob = await loadBlob(sourceShot.blobKey);
+      if (blob && sourceShot.kind === 'image') {
+        startFrame = await blobToDataUrl(blob);
+      }
+    }
+
+    const turnShot: MediaShot = {
+      id: makeId('turn'),
+      projectId: activeProjectId,
+      label: nextShotLabel(),
+      kind: nextKind,
+      mode: nextMode,
+      status: 'queued',
+      progress: 5,
+      phase: isExtend ? 'Queued +5s Free Extend Chain...' : 'Queued $0 Director Edit...',
+      rawPrompt: mergedRaw,
+      compiledPrompt: compiled.compiledPrompt,
+      negativePrompt: sourceShot.negativePrompt,
+      appliedTags: compiled.appliedTags,
+      aspectRatio: sourceShot.aspectRatio,
+      width,
+      height,
+      durationSec: isExtend ? 5 : sourceShot.durationSec,
+      fps: 24,
+      steps: sourceShot.steps,
+      cfgScale: sourceShot.cfgScale,
+      seed: isExtend ? sourceShot.seed : (sourceShot.seed + 1337) % 2_000_000_000,
+      engine: engineSettings.activeEngine,
+      model:
+        nextKind === 'video'
+          ? isExtend
+            ? 'Free Wan 2.2 / LTX (+5s Chain)'
+            : 'Free Wan 2.2 / LTX (Re-Direct)'
+          : `Free ${engineSettings.freeImageModel.toUpperCase()} (Edit Turn)`,
+      startFrameDataUrl: nextKind === 'video' ? startFrame : undefined,
+      parentShotId: sourceShot.id,
+      storyboardOrder: nextStoryboardOrder,
+      createdAt: Date.now(),
+    };
+    await saveShot(turnShot);
+    setShots((prev) => [turnShot, ...prev]);
+    showToast(
+      isExtend
+        ? `Chained ${turnShot.label} (+5s $0 Extend) directly into Storyboard Cut!`
+        : `Queued $0 Director Edit as ${turnShot.label}`
+    );
+  };
+
+  const handleSyncFreeFoley = async (shot: MediaShot) => {
+    if (!shot.blobKey) throw new Error('Video blob not found in local Vault');
+    const existingBlob = await loadBlob(shot.blobKey);
+    if (!existingBlob) throw new Error('Could not load video from local Vault');
+
+    const synced = await synthesizeSyncedVideoAudio(
+      existingBlob,
+      shot.rawPrompt || shot.compiledPrompt,
+      shot.durationSec,
+      shot.seed
+    );
+
+    const newBlobKey = `blob_${shot.id}_foley_${Date.now()}`;
+    await saveBlob(newBlobKey, synced.blob);
+    const oldKey = shot.blobKey;
+    const objUrl = URL.createObjectURL(synced.blob);
+    blobUrlsRef.current = { ...blobUrlsRef.current, [newBlobKey]: objUrl };
+    setBlobUrls({ ...blobUrlsRef.current });
+
+    const updated: MediaShot = {
+      ...shot,
+      blobKey: newBlobKey,
+      hasSyncedAudio: true,
+      model: shot.model.includes('MMAudio') ? shot.model : `${shot.model} + MMAudio Foley`,
+    };
+    await updateShotState(updated);
+    if (oldKey && oldKey !== newBlobKey) {
+      await deleteBlob(oldKey);
+      if (blobUrlsRef.current[oldKey]) {
+        URL.revokeObjectURL(blobUrlsRef.current[oldKey]);
+      }
+    }
+    await refreshVaultUsage();
+    showToast(`Synced frame-accurate AI Foley audio onto ${shot.label} ($0)!`);
   };
 
   const handleDeleteShot = async (shot: MediaShot) => {
@@ -904,6 +1042,10 @@ export default function App() {
         onOmniTurn={(shot, turnPrompt, turnAction) =>
           void handleOmniTurn(shot, turnPrompt, turnAction)
         }
+        onFreeDirectorTurn={(shot, turnPrompt, turnAction, frameDataUrl) =>
+          void handleFreeDirectorTurn(shot, turnPrompt, turnAction, frameDataUrl)
+        }
+        onSyncFreeFoley={(shot) => handleSyncFreeFoley(shot)}
         onDownload={(shot) => void handleDownloadShot(shot)}
       />
     </div>

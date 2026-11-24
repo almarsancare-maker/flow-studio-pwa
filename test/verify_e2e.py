@@ -46,10 +46,14 @@ def main():
         page.get_by_text("Parsed 3 Shots Ready to Queue").wait_for(timeout=5_000)
         page.get_by_role("button", name="Cancel").click()
 
-        print("[4/6] Testing 4-Engine Settings (Free Cloud + Colab T4 + Gemini Omni 1.2 + Seedance 2.5) ...")
+        print("[4/6] Testing Pure $0-First Engine Modal + Collapsible Paid BYOK Drawer ...")
         page.get_by_test_id("open-engine-btn").click()
         page.get_by_test_id("select-engine-free").wait_for(timeout=5_000)
         page.get_by_test_id("select-engine-colab").wait_for(timeout=5_000)
+        page.get_by_test_id("free-image-model-select").wait_for(timeout=5_000)
+        page.get_by_test_id("free-auto-audio-toggle").wait_for(timeout=5_000)
+        # Paid BYOK APIs stay cleanly collapsed until user explicitly expands them
+        page.get_by_test_id("toggle-paid-apis-btn").click()
         page.get_by_test_id("select-engine-omni").wait_for(timeout=5_000)
         page.get_by_test_id("select-engine-seedance").wait_for(timeout=5_000)
         page.get_by_text("Engine 3: Official Google Gemini Omni 1.2 Flash").first.wait_for(timeout=5_000)
@@ -63,7 +67,11 @@ def main():
         assert nb_href == "/FlowStudio_Colab_T4_Backend.ipynb", f"Bad notebook href: {nb_href}"
         page.get_by_role("button", name="Cancel").click()
 
-        print("[5/6] Testing Live $0 Generation + @TAG Expansion + Storyboard Cut ...")
+        print("[5/6] Testing Multi-Take, Look Presets, Live $0 Gen, Lightbox $0 Turn/4K & Storyboard ...")
+        page.get_by_test_id("take-count-select").wait_for(timeout=5_000)
+        page.get_by_test_id("toggle-style-presets-btn").click()
+        page.get_by_role("button", name="+ 35mm Cinema").wait_for(timeout=5_000)
+        page.get_by_test_id("toggle-style-presets-btn").click()
         composer = page.get_by_test_id("composer-prompt-input")
         composer.fill("Close-up of @MIRA inside @LOC-D, warm lamp light, rain on window, 35mm cinema still")
         page.get_by_text("Bible Auto-Expanded:").first.wait_for(timeout=5_000)
@@ -76,6 +84,13 @@ def main():
         dims = img.evaluate("el => ({ w: el.naturalWidth, h: el.naturalHeight })")
         assert dims["w"] >= 256 and dims["h"] >= 256, f"Image failed to load cleanly: {dims}"
         print(f"      Live $0 image rendered cleanly: {dims['w']}x{dims['h']}")
+
+        # Open Lightbox and verify $0 Universal Turn-by-Turn Studio + 4K Export button
+        img.click()
+        page.get_by_test_id("director-turn-panel").wait_for(timeout=5_000)
+        page.get_by_test_id("upscale-4k-btn").wait_for(timeout=5_000)
+        page.get_by_test_id("free-extend-btn").wait_for(timeout=5_000)
+        page.keyboard.press("Escape")
 
         # Add to Storyboard Cut (Fix #3)
         shot_card.get_by_role("button", name="Cut").click()
