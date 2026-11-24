@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowUpRight,
   Check,
   Clapperboard,
   Download,
@@ -13,7 +14,6 @@ import {
   RefreshCw,
   Scissors,
   Search,
-  Sparkles,
   Trash2,
   Volume2,
   VolumeX,
@@ -41,22 +41,22 @@ type FilterKind = 'all' | 'video' | 'image' | 'cut';
 
 const STARTER_CARDS: { title: string; tag: string; mode: GenerationMode; prompt: string }[] = [
   {
-    title: 'Keyframe Still ($0)',
-    tag: 'Stage 1 · @MIRA + @LOC-D',
+    title: 'Keyframe Still',
+    tag: 'FLUX · @MIRA + @LOC-D · $0',
     mode: 't2i',
     prompt:
       'Medium close-up of @MIRA sketching by a rain-streaked window inside @LOC-D, warm tungsten lamp, 35mm cinema still',
   },
   {
-    title: 'Seedance 2.5 Video + Audio',
-    tag: 'T2V · Native SFX & Dialogue',
+    title: 'Cinematic Video + Audio',
+    tag: 'Text to Video · Synced SFX',
     mode: 't2v',
     prompt:
       'Slow cinematic dolly-in on @MIRA looking out the rain-streaked window inside @LOC-D, soft distant thunder and rain patter, 35mm film',
   },
   {
     title: 'Anamorphic Establishing Shot',
-    tag: 'Stage 1 · 21:9 Cinema',
+    tag: '21:9 Cinema Frame · $0',
     mode: 't2i',
     prompt:
       'Wide establishing shot of neon-lit Manila alley after tropical rain, wet asphalt reflections, anamorphic lens flare, moody cinema',
@@ -110,52 +110,61 @@ export function MediaGrid({
 
   if (shots.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 sm:py-16 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400/20 via-orange-500/10 to-violet-500/20 border border-white/10 flex items-center justify-center mb-4 shadow-2xl">
-          <Sparkles className="w-7 h-7 text-amber-300" />
+      <section className="flex-1 flex flex-col items-center justify-center px-6 py-10 sm:py-16 text-center max-w-[1200px] mx-auto w-full">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-[32px] bg-white/5 border border-white/15 text-[12px] font-medium text-white/75 mb-6 whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#29c58f] shrink-0" />
+          <span>
+            $0 Forever Open-Weight Cinema
+            <span className="hidden sm:inline"> · Character Bible · Storyboard Cut</span>
+          </span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-100">
-          Cabardo Studio AI Generator{' '}
-          <span className="text-emerald-400">FREE Lifetime</span>
+
+        <h1 className="text-[38px] sm:text-[56px] lg:text-[72px] font-medium tracking-[-0.04em] leading-[1.02] text-white max-w-4xl">
+          Create cinema without limits
         </h1>
-        <p className="text-sm text-zinc-400 max-w-2xl mt-2.5 leading-relaxed">
-          Google Flow–style cinema studio with every limitation fixed: locked{' '}
-          <span className="text-amber-300 font-mono">@TAG</span> Character Bible, First-to-Last Frame
-          continuity, Scenebuilder Video Stitcher, offline IndexedDB Vault, Bulk Script Import,{' '}
-          <span className="text-emerald-300">$0 Free Cloud &amp; Colab T4</span>, plus{' '}
-          <span className="text-violet-300">Official Seedance 2.5</span>.
+
+        <p className="text-[16px] leading-[24px] text-white/75 max-w-2xl mt-5">
+          Direct keyframes, video continuity, and synced sound in one studio—powered by locked{' '}
+          <span className="font-mono text-white">@TAG</span> character memory, first-to-last frame
+          morphing, offline vault storage, and zero-cost open-weight engines.
         </p>
 
-        <div className="grid sm:grid-cols-3 gap-3 mt-8 max-w-3xl w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 w-full">
           {STARTER_CARDS.map((card, idx) => (
             <button
               key={idx}
               type="button"
+              data-testid={idx === 0 ? 'flow-card-surface' : undefined}
               onClick={() => onQuickPrompt(card.prompt, card.mode)}
-              className="text-left p-4 rounded-2xl bg-zinc-900/65 border border-zinc-800/90 hover:border-amber-500/40 hover:bg-zinc-900/95 transition group"
+              className="flow-card text-left p-5 flex flex-col justify-between gap-4 group cursor-pointer"
             >
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="text-xs font-semibold text-zinc-100 group-hover:text-amber-300 transition">
-                  {card.title}
-                </span>
-                <span className="text-[10px] font-mono text-amber-400">→</span>
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-[15px] font-medium text-white tracking-[-0.01em]">
+                    {card.title}
+                  </span>
+                  <ArrowUpRight className="w-4 h-4 stroke-[1.5] text-white/50 group-hover:text-white transition shrink-0" />
+                </div>
+                <div className="text-[12px] text-white/50 font-mono mb-3">{card.tag}</div>
+                <p className="text-[13px] leading-[20px] text-white/75 group-hover:text-white line-clamp-3 transition">
+                  {card.prompt}
+                </p>
               </div>
-              <div className="text-[10px] text-zinc-500 font-mono mb-2">{card.tag}</div>
-              <div className="text-xs text-zinc-400 group-hover:text-zinc-200 line-clamp-3 leading-relaxed">
-                {card.prompt}
+              <div className="text-[12px] font-medium text-white/50 group-hover:text-white transition">
+                Load into composer
               </div>
             </button>
           ))}
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-5 pt-4 pb-6 space-y-4">
-      {/* Google Flow Contact Sheet Filter & Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-zinc-900/80 border border-zinc-800/90">
+    <div className="max-w-[1536px] w-full mx-auto px-6 md:px-8 pt-4 pb-8 space-y-6">
+      {/* Flow Contact-Sheet Pill Filter & Search Strip */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flow-pill-group inline-flex items-center gap-1 p-1.5">
           {(
             [
               { id: 'all', label: 'All', count: counts.all },
@@ -163,28 +172,27 @@ export function MediaGrid({
               { id: 'image', label: 'Stills', count: counts.image },
               { id: 'cut', label: 'In Cut', count: counts.cut },
             ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              data-testid={`filter-tab-${tab.id}`}
-              onClick={() => setFilter(tab.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition flex items-center gap-1.5 ${
-                filter === tab.id
-                  ? 'bg-zinc-100 text-zinc-950'
-                  : 'text-zinc-400 hover:text-zinc-100'
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`text-[10px] ${
-                  filter === tab.id ? 'text-zinc-700' : 'text-zinc-500'
+          ).map((tab) => {
+            const active = filter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                data-testid={`filter-tab-${tab.id}`}
+                onClick={() => setFilter(tab.id)}
+                className={`px-3.5 py-1.5 rounded-[32px] text-[13px] font-medium transition flex items-center gap-1.5 cursor-pointer ${
+                  active
+                    ? 'bg-white text-[#121317]'
+                    : 'text-white/70 hover:text-white'
                 }`}
               >
-                {tab.count}
-              </span>
-            </button>
-          ))}
+                <span>{tab.label}</span>
+                <span className={`text-[11px] ${active ? 'text-[#121317]/70' : 'text-white/50'}`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
@@ -192,29 +200,30 @@ export function MediaGrid({
             <button
               type="button"
               onClick={onRetryAllFailed}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-200 hover:bg-rose-500/25"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-[32px] text-[12px] font-medium bg-[#b22f25]/25 border border-[#fe6e6e]/40 text-[#fe6e6e] hover:bg-[#b22f25]/35 transition cursor-pointer"
             >
-              <RefreshCw className="w-3 h-3" />
+              <RefreshCw className="w-3.5 h-3.5 stroke-[1.6]" />
               Retry Failed ({counts.failed})
             </button>
           )}
 
-          <div className="relative flex-1 min-w-[180px] sm:w-52 sm:flex-initial">
-            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="relative flex-1 min-w-[180px] sm:w-60 sm:flex-initial">
+            <Search className="w-4 h-4 stroke-[1.5] text-white/50 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search shots or @TAG..."
-              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-200 placeholder:text-zinc-500 focus:border-zinc-600 outline-none"
+              className="w-full pl-9 pr-8 py-2 text-[13px] rounded-[32px] bg-white/5 border border-white/15 text-white placeholder:text-white/50 focus:border-white/35 outline-none transition"
             />
             {query && (
               <button
                 type="button"
+                aria-label="Clear search"
                 onClick={() => setQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white cursor-pointer"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5 stroke-[1.6]" />
               </button>
             )}
           </div>
@@ -223,15 +232,20 @@ export function MediaGrid({
             type="button"
             onClick={() => setCompact((v) => !v)}
             title={compact ? 'Switch to Cozy Grid' : 'Switch to Compact Grid'}
-            className="hidden sm:flex p-1.5 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-zinc-100"
+            aria-label={compact ? 'Switch to Cozy Grid' : 'Switch to Compact Grid'}
+            className="flow-btn-glass hidden sm:flex w-9 h-9 items-center justify-center cursor-pointer"
           >
-            {compact ? <Grid2x2 className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
+            {compact ? (
+              <Grid2x2 className="w-4 h-4 stroke-[1.5]" />
+            ) : (
+              <Grid3x3 className="w-4 h-4 stroke-[1.5]" />
+            )}
           </button>
         </div>
       </div>
 
       {visibleShots.length === 0 ? (
-        <div className="py-16 text-center text-xs text-zinc-500">
+        <div className="py-16 text-center text-[14px] text-white/50">
           No shots match this filter.{' '}
           <button
             type="button"
@@ -239,20 +253,20 @@ export function MediaGrid({
               setFilter('all');
               setQuery('');
             }}
-            className="text-amber-300 underline ml-1"
+            className="text-white underline underline-offset-4 ml-1 cursor-pointer"
           >
             Reset filter
           </button>
         </div>
       ) : (
         <div
-          className={`grid gap-4 ${
+          className={`grid gap-6 ${
             compact
               ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
               : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
           }`}
         >
-          {visibleShots.map((shot) => {
+          {visibleShots.map((shot, idx) => {
             const mediaUrl = (shot.blobKey && blobUrls[shot.blobKey]) || shot.thumbnailDataUrl;
             const inStoryboard = shot.storyboardOrder !== null;
             const isUnmuted = Boolean(unmutedIds[shot.id]);
@@ -260,12 +274,13 @@ export function MediaGrid({
             return (
               <article
                 key={shot.id}
-                data-testid={`shot-card-${shot.label}`}
-                className="group rounded-2xl border border-zinc-800/80 bg-zinc-950/90 overflow-hidden flex flex-col hover:border-zinc-600/90 transition shadow-xl shadow-black/40"
+                data-testid={idx === 0 ? 'flow-card-surface' : `shot-card-${shot.label}`}
+                data-shot-label={shot.label}
+                className="flow-card group overflow-hidden flex flex-col"
               >
                 {/* Visual Stage */}
                 <div
-                  className="relative aspect-video bg-zinc-900 overflow-hidden cursor-pointer"
+                  className="relative aspect-video bg-black overflow-hidden cursor-pointer"
                   onClick={() => {
                     if (shot.status === 'completed') onOpenLightbox(shot);
                   }}
@@ -288,55 +303,59 @@ export function MediaGrid({
                           }}
                           className="w-full h-full object-cover"
                         />
+                        <div className="pointer-events-none absolute inset-0 flow-tile-scrim" />
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setUnmutedIds((prev) => ({ ...prev, [shot.id]: !prev[shot.id] }));
                           }}
-                          title={isUnmuted ? 'Mute preview audio' : 'Unmute Seedance / video audio'}
-                          className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/75 text-zinc-200 border border-white/15 hover:bg-black transition"
+                          title={isUnmuted ? 'Mute preview audio' : 'Unmute video audio'}
+                          className="flow-btn-glass absolute bottom-2.5 right-2.5 w-8 h-8 flex items-center justify-center cursor-pointer"
                         >
                           {isUnmuted ? (
-                            <Volume2 className="w-3.5 h-3.5 text-violet-300" />
+                            <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-white" />
                           ) : (
-                            <VolumeX className="w-3.5 h-3.5 text-zinc-400" />
+                            <VolumeX className="w-3.5 h-3.5 stroke-[1.6] text-white/70" />
                           )}
                         </button>
                       </>
                     ) : (
-                      <img
-                        src={mediaUrl}
-                        alt={shot.rawPrompt}
-                        className="w-full h-full object-cover group-hover:scale-[1.03] transition duration-300"
-                      />
+                      <>
+                        <img
+                          src={mediaUrl}
+                          alt={shot.rawPrompt}
+                          className="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300"
+                        />
+                        <div className="pointer-events-none absolute inset-0 flow-tile-scrim opacity-75" />
+                      </>
                     )
                   ) : shot.status === 'failed' ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-rose-950/20">
-                      <AlertCircle className="w-6 h-6 text-rose-400 mb-1.5" />
-                      <p className="text-xs font-medium text-rose-200">Render Failed</p>
-                      <p className="text-[11px] text-rose-300/80 mt-1 line-clamp-2">{shot.error}</p>
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#b22f25]/15">
+                      <AlertCircle className="w-6 h-6 stroke-[1.5] text-[#fe6e6e] mb-2" />
+                      <p className="text-[13px] font-medium text-white">Render Failed</p>
+                      <p className="text-[12px] text-[#fe6e6e] mt-1 line-clamp-2">{shot.error}</p>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           onRetryShot(shot);
                         }}
-                        className="mt-2.5 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-rose-500/20 text-rose-200 border border-rose-500/30 hover:bg-rose-500/30"
+                        className="flow-btn-glass mt-3 flex items-center gap-1.5 px-3 py-1 text-[12px] font-medium cursor-pointer"
                       >
-                        <RefreshCw className="w-3 h-3" />
+                        <RefreshCw className="w-3 h-3 stroke-[1.6]" />
                         Retry
                       </button>
                     </div>
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900">
-                      <Loader2 className="w-6 h-6 text-amber-400 animate-spin mb-2" />
-                      <p className="text-xs font-medium text-zinc-200">
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#131314]">
+                      <Loader2 className="w-6 h-6 stroke-[1.5] text-white animate-spin mb-2.5" />
+                      <p className="text-[13px] font-medium text-white">
                         {shot.status === 'queued' ? 'Queued in Batch...' : shot.phase}
                       </p>
-                      <div className="w-3/4 h-1.5 rounded-full bg-zinc-800 mt-2.5 overflow-hidden">
+                      <div className="w-3/4 h-1 rounded-full bg-white/15 mt-3 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-amber-400 to-violet-400 transition-all duration-300"
+                          className="h-full bg-white transition-all duration-300"
                           style={{ width: `${Math.max(8, shot.progress)}%` }}
                         />
                       </div>
@@ -346,39 +365,39 @@ export function MediaGrid({
                           e.stopPropagation();
                           onCancelShot(shot);
                         }}
-                        className="mt-2.5 px-2.5 py-0.5 rounded-full text-[10px] text-zinc-400 hover:text-rose-300 border border-zinc-800 hover:border-rose-500/40"
+                        className="mt-3 px-3 py-1 rounded-[32px] text-[11px] text-white/60 hover:text-[#fe6e6e] border border-white/15 hover:border-[#fe6e6e]/40 transition cursor-pointer"
                       >
                         Cancel
                       </button>
                     </div>
                   )}
 
-                  {/* Top Overlay Badges */}
-                  <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-                    <div className="flex items-center gap-1">
-                      <span className="px-2 py-0.5 text-[10px] font-bold font-mono rounded-full bg-black/75 text-amber-300 border border-white/10">
+                  {/* Top Frosted Glass Badges */}
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2.5 py-0.5 text-[11px] font-medium font-mono rounded-[32px] bg-black/45 text-white border border-white/20 backdrop-blur-sm">
                         {shot.label}
                       </span>
-                      <span className="px-2 py-0.5 text-[10px] rounded-full bg-black/70 text-zinc-200 border border-white/10 uppercase">
+                      <span className="px-2.5 py-0.5 text-[10px] font-medium rounded-[32px] bg-black/45 text-white/85 border border-white/15 backdrop-blur-sm uppercase">
                         {shot.kind === 'video' ? `${shot.mode} · ${shot.durationSec}s` : 'STILL'}
                       </span>
                     </div>
                     {shot.status === 'completed' && (
-                      <span className="p-1 rounded-full bg-black/70 text-zinc-300 opacity-0 group-hover:opacity-100 transition">
-                        <Maximize2 className="w-3 h-3" />
+                      <span className="w-7 h-7 rounded-full bg-black/45 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition">
+                        <Maximize2 className="w-3 h-3 stroke-[1.6]" />
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Metadata + Action Bar */}
-                <div className="p-3 flex-1 flex flex-col justify-between gap-2.5">
+                {/* Metadata + Monochrome Action Bar */}
+                <div className="p-3.5 flex-1 flex flex-col justify-between gap-3">
                   <div>
-                    <p className="text-xs text-zinc-200 line-clamp-2 leading-relaxed">
+                    <p className="text-[13px] text-white/90 line-clamp-2 leading-[20px]">
                       {shot.rawPrompt}
                     </p>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px] text-zinc-500">
-                      <span className="truncate max-w-[175px]" title={shot.model}>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[11px] text-white/50">
+                      <span className="truncate max-w-[165px]" title={shot.model}>
                         {shot.model}
                       </span>
                       <span>·</span>
@@ -386,7 +405,7 @@ export function MediaGrid({
                       {shot.appliedTags.map((t) => (
                         <span
                           key={t}
-                          className="px-1.5 py-0.2 rounded-full bg-amber-500/10 text-amber-300 font-mono"
+                          className="px-1.5 py-0.5 rounded-[32px] bg-white/10 text-white/85 font-mono text-[10px]"
                         >
                           {t}
                         </span>
@@ -394,28 +413,25 @@ export function MediaGrid({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-1 pt-2 border-t border-zinc-800/80">
-                    <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-between gap-1 pt-2.5 border-t border-white/15">
+                    <div className="flex items-center gap-1.5">
                       {shot.status === 'completed' && (
                         <>
                           <button
                             type="button"
                             onClick={() => onToggleStoryboard(shot)}
+                            data-active={inStoryboard ? 'true' : 'false'}
                             title={
                               inStoryboard
                                 ? 'In Scenebuilder Cut (click to remove)'
                                 : 'Add to Scenebuilder Timeline'
                             }
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition ${
-                              inStoryboard
-                                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                            }`}
+                            className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium cursor-pointer"
                           >
                             {inStoryboard ? (
-                              <Check className="w-3 h-3" />
+                              <Check className="w-3 h-3 stroke-[1.8]" />
                             ) : (
-                              <ListPlus className="w-3 h-3" />
+                              <ListPlus className="w-3 h-3 stroke-[1.6]" />
                             )}
                             <span>{inStoryboard ? 'In Cut' : 'Cut'}</span>
                           </button>
@@ -425,9 +441,9 @@ export function MediaGrid({
                               type="button"
                               onClick={() => onAnimateStill(shot)}
                               title="Animate this keyframe into a video shot (I2V)"
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition"
+                              className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium cursor-pointer"
                             >
-                              <Clapperboard className="w-3 h-3" />
+                              <Clapperboard className="w-3 h-3 stroke-[1.6]" />
                               <span>Animate</span>
                             </button>
                           ) : (
@@ -435,9 +451,9 @@ export function MediaGrid({
                               type="button"
                               onClick={() => onGrabLastFrame(shot)}
                               title="Extract exact last frame as Start Frame for next scene"
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition"
+                              className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium cursor-pointer"
                             >
-                              <Scissors className="w-3 h-3" />
+                              <Scissors className="w-3 h-3 stroke-[1.6]" />
                               <span>Last Frame</span>
                             </button>
                           )}
@@ -450,27 +466,30 @@ export function MediaGrid({
                         type="button"
                         onClick={() => onRemixShot(shot)}
                         title="Remix prompt, seed & negative prompt in composer"
-                        className="p-1.5 rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
+                        aria-label="Remix shot"
+                        className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
                       >
-                        <Film className="w-3.5 h-3.5" />
+                        <Film className="w-3.5 h-3.5 stroke-[1.6]" />
                       </button>
                       {shot.status === 'completed' && (
                         <button
                           type="button"
                           onClick={() => onDownloadShot(shot)}
                           title="Download media file"
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
+                          aria-label="Download shot"
+                          className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
                         >
-                          <Download className="w-3.5 h-3.5" />
+                          <Download className="w-3.5 h-3.5 stroke-[1.6]" />
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => onDeleteShot(shot)}
                         title="Delete shot"
-                        className="p-1.5 rounded-full text-zinc-500 hover:text-rose-400 hover:bg-zinc-900"
+                        aria-label="Delete shot"
+                        className="p-1.5 rounded-full text-white/45 hover:text-[#fe6e6e] hover:bg-white/10 transition cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5 stroke-[1.6]" />
                       </button>
                     </div>
                   </div>

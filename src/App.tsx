@@ -853,7 +853,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#09090b] text-zinc-100">
+    <div
+      data-testid="flow-app-shell"
+      className="flow-shell flex flex-col"
+    >
       <TopBar
         projects={projects}
         activeProject={activeProject}
@@ -877,19 +880,19 @@ export default function App() {
         onImportProjectJson={(raw) => void handleImportProjectJson(raw)}
       />
 
-      {/* Toast Notification (Bottom-right margin — never occludes TopBar, Search, or centered Composer) */}
+      {/* Toast Notification (Monochrome Flow Glass Pill — never occludes header or composer) */}
       {toast && (
         <button
           type="button"
           onClick={() => setToast(null)}
-          className="fixed bottom-4 right-4 z-50 px-3.5 py-2 rounded-full border border-amber-500/40 bg-zinc-950/95 text-xs text-amber-200 shadow-2xl max-w-[90vw] truncate hover:border-amber-400 transition cursor-pointer"
+          className="fixed bottom-5 right-5 z-[1100] px-4 py-2.5 rounded-[32px] border border-white/25 bg-[#131314]/95 text-[13px] font-medium text-white shadow-[0_16px_32px_-8px_rgba(0,0,0,0.65)] backdrop-blur-xl max-w-[90vw] truncate hover:border-white/40 transition cursor-pointer"
         >
           {toast}
         </button>
       )}
 
       {/* Main Media Canvas */}
-      <main className="flex-1 flex flex-col">
+      <main data-testid="flow-main-canvas" className="flex-1 flex flex-col">
         <MediaGrid
           shots={shots}
           blobUrls={blobUrls}
@@ -931,8 +934,8 @@ export default function App() {
         />
       </main>
 
-      {/* Unified Bottom Cinema Dock (Storyboard Cut + Composer — zero overlap on Desktop/Tablet, natural scroll on Mobile) */}
-      <div className="md:sticky md:bottom-0 z-30 pt-2 bg-gradient-to-t from-[#08080a] via-[#08080a]/92 to-transparent">
+      {/* Unified Bottom Cinema Dock */}
+      <div className="md:sticky md:bottom-0 z-30 pt-3 flow-bottom-dock">
         <StoryboardBar
           clips={storyboardClips}
           blobUrls={blobUrls}

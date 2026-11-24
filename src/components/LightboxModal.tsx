@@ -69,7 +69,10 @@ export function LightboxModal({
     setNotice('');
     try {
       const frame = await grabVideoFrame(vid, position);
-      onInjectStartFrame(frame.dataUrl, `${shot.label} (${position} frame @ ${frame.timestampSec.toFixed(2)}s)`);
+      onInjectStartFrame(
+        frame.dataUrl,
+        `${shot.label} (${position} frame @ ${frame.timestampSec.toFixed(2)}s)`
+      );
       onClose();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Frame extraction failed');
@@ -115,9 +118,7 @@ export function LightboxModal({
   const handleUniversalTurn = async (action: 'edit' | 'extend') => {
     const promptVal =
       turnPrompt.trim() ||
-      (action === 'extend'
-        ? `Continue seamlessly from ${shot.label}: ${shot.rawPrompt}`
-        : '');
+      (action === 'extend' ? `Continue seamlessly from ${shot.label}: ${shot.rawPrompt}` : '');
     if (!promptVal) return;
 
     if (shot.omniInteractionId) {
@@ -150,11 +151,12 @@ export function LightboxModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+      className="fixed inset-0 z-[1050] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl max-h-[92vh] rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden flex flex-col lg:flex-row shadow-2xl"
+        data-testid="flow-modal-surface"
+        className="flow-modal w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col lg:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Left Theater Canvas */}
@@ -178,7 +180,7 @@ export function LightboxModal({
           )}
 
           {/* Continuity Action Ribbon */}
-          <div className="w-full p-3 bg-zinc-950/95 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+          <div className="w-full p-3.5 bg-[#131314] border-t border-white/15 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {shot.kind === 'video' ? (
                 <>
@@ -186,19 +188,19 @@ export function LightboxModal({
                     type="button"
                     disabled={extracting}
                     onClick={() => void handleGrab('current')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300 disabled:opacity-50"
+                    className="flow-cta-primary flex items-center gap-1.5 px-3.5 py-2 text-[12px] disabled:opacity-45 cursor-pointer"
                   >
-                    <Scissors className="w-3.5 h-3.5" />
-                    Grab Current Frame → Next Scene
+                    <Scissors className="w-3.5 h-3.5 stroke-[1.7]" />
+                    Grab Current Frame → Next
                   </button>
                   <button
                     type="button"
                     disabled={extracting}
                     onClick={() => void handleGrab('last')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 border border-amber-500/40 text-amber-200 hover:bg-zinc-800 disabled:opacity-50"
+                    className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-45 cursor-pointer"
                   >
-                    <Scissors className="w-3.5 h-3.5" />
-                    Grab Last Frame → Next Scene
+                    <Scissors className="w-3.5 h-3.5 stroke-[1.6]" />
+                    Grab Last Frame → Next
                   </button>
                 </>
               ) : (
@@ -209,10 +211,10 @@ export function LightboxModal({
                       onInjectStartFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
                       onClose();
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300"
+                    className="flow-cta-primary flex items-center gap-1.5 px-4 py-2 text-[12px] cursor-pointer"
                   >
-                    <Clapperboard className="w-3.5 h-3.5" />
-                    Animate This Keyframe → I2V
+                    <Clapperboard className="w-3.5 h-3.5 stroke-[1.7]" />
+                    Animate Keyframe → I2V
                   </button>
                   <button
                     type="button"
@@ -220,7 +222,7 @@ export function LightboxModal({
                       onInjectEndFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
                       onClose();
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-violet-500/15 border border-violet-500/40 text-violet-200 hover:bg-violet-500/25"
+                    className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium cursor-pointer"
                   >
                     Use as End Frame
                   </button>
@@ -236,12 +238,12 @@ export function LightboxModal({
                   disabled={upscaling}
                   onClick={() => void handle4KUpscaleDownload()}
                   title="Stepped Lanczos + Unsharp Mask 4K Cinema Export ($0 local)"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                  className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-45 cursor-pointer"
                 >
                   {upscaling ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 stroke-[1.6] animate-spin" />
                   ) : (
-                    <Maximize2 className="w-3.5 h-3.5" />
+                    <Maximize2 className="w-3.5 h-3.5 stroke-[1.6]" />
                   )}
                   4K Export ($0)
                 </button>
@@ -252,18 +254,14 @@ export function LightboxModal({
                   disabled={syncingFoley}
                   onClick={() => void handleSyncFoley()}
                   title="Generate frame-synced AI sound effects & cinema foley via Free MMAudio ($0)"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50 ${
-                    shot.hasSyncedAudio
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 hover:bg-emerald-500/30'
-                      : 'bg-sky-500/15 border-sky-500/40 text-sky-200 hover:bg-sky-500/25'
-                  }`}
+                  className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-45 cursor-pointer"
                 >
                   {syncingFoley ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 stroke-[1.6] animate-spin" />
                   ) : shot.hasSyncedAudio ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.6] text-[#29c58f]" />
                   ) : (
-                    <Volume2 className="w-3.5 h-3.5" />
+                    <Volume2 className="w-3.5 h-3.5 stroke-[1.6]" />
                   )}
                   {shot.hasSyncedAudio ? 'Re-Sync AI Foley ($0)' : 'Sync AI Foley ($0)'}
                 </button>
@@ -272,73 +270,76 @@ export function LightboxModal({
               <button
                 type="button"
                 onClick={() => onDownload(shot)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-700 text-zinc-200 hover:bg-zinc-800"
+                className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 stroke-[1.6]" />
                 Download
               </button>
             </div>
           </div>
           {notice && (
-            <div className="text-xs text-emerald-300 px-3 pb-2">{notice}</div>
+            <div className="text-[12px] text-[#29c58f] px-4 pb-2.5 bg-[#131314] w-full">
+              {notice}
+            </div>
           )}
         </div>
 
         {/* Right Shot Recipe Inspector */}
-        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-zinc-800 p-4 overflow-y-auto space-y-4">
+        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-white/15 p-5 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-mono font-bold rounded bg-amber-500/15 text-amber-300">
+              <span className="px-2.5 py-0.5 text-[12px] font-mono font-medium rounded-[32px] bg-white/10 border border-white/15 text-white">
                 {shot.label}
               </span>
-              <span className="text-xs text-zinc-400 uppercase">{shot.mode}</span>
+              <span className="text-[12px] text-white/55 uppercase">{shot.mode}</span>
             </div>
             <button
               type="button"
+              aria-label="Close inspector"
               onClick={onClose}
-              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
+              className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 stroke-[1.6]" />
             </button>
           </div>
 
           <div className="space-y-1">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-white/45">
               Raw Prompt
             </div>
-            <p className="text-xs text-zinc-200 leading-relaxed">{shot.rawPrompt}</p>
+            <p className="text-[13px] text-white/90 leading-[20px]">{shot.rawPrompt}</p>
           </div>
 
           {shot.compiledPrompt !== shot.rawPrompt && (
-            <div className="space-y-1 p-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20">
-              <div className="text-[11px] font-semibold text-amber-300 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
+            <div className="space-y-1 p-3 rounded-[14px] bg-white/5 border border-white/15">
+              <div className="text-[11px] font-medium text-white flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 stroke-[1.6]" />
                 Compiled Prompt ({shot.appliedTags.join(', ')})
               </div>
-              <p className="text-[11px] text-zinc-300 leading-relaxed">{shot.compiledPrompt}</p>
+              <p className="text-[12px] text-white/70 leading-[18px]">{shot.compiledPrompt}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="p-2 rounded-lg bg-zinc-900/80 border border-zinc-800">
-              <div className="text-[10px] text-zinc-500">Seed</div>
-              <div className="font-mono text-zinc-200">{shot.seed}</div>
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
+            <div className="p-2.5 rounded-[12px] bg-white/5 border border-white/15">
+              <div className="text-[10px] text-white/45">Seed</div>
+              <div className="font-mono text-white mt-0.5">{shot.seed}</div>
             </div>
-            <div className="p-2 rounded-lg bg-zinc-900/80 border border-zinc-800">
-              <div className="text-[10px] text-zinc-500">Resolution</div>
-              <div className="font-mono text-zinc-200">
+            <div className="p-2.5 rounded-[12px] bg-white/5 border border-white/15">
+              <div className="text-[10px] text-white/45">Resolution</div>
+              <div className="font-mono text-white mt-0.5">
                 {shot.width}×{shot.height}
               </div>
             </div>
-            <div className="p-2 rounded-lg bg-zinc-900/80 border border-zinc-800">
-              <div className="text-[10px] text-zinc-500">Steps / CFG</div>
-              <div className="font-mono text-zinc-200">
+            <div className="p-2.5 rounded-[12px] bg-white/5 border border-white/15">
+              <div className="text-[10px] text-white/45">Steps / CFG</div>
+              <div className="font-mono text-white mt-0.5">
                 {shot.steps} / {shot.cfgScale}
               </div>
             </div>
-            <div className="p-2 rounded-lg bg-zinc-900/80 border border-zinc-800">
-              <div className="text-[10px] text-zinc-500">Engine</div>
-              <div className="truncate text-zinc-200" title={shot.model}>
+            <div className="p-2.5 rounded-[12px] bg-white/5 border border-white/15">
+              <div className="text-[10px] text-white/45">Engine</div>
+              <div className="truncate text-white mt-0.5" title={shot.model}>
                 {shot.model}
               </div>
             </div>
@@ -346,35 +347,27 @@ export function LightboxModal({
 
           {shot.negativePrompt && (
             <div className="space-y-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-white/45">
                 Negative Prompt
               </div>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">{shot.negativePrompt}</p>
+              <p className="text-[12px] text-white/55 leading-[18px]">{shot.negativePrompt}</p>
             </div>
           )}
 
-          {/* Universal Turn-by-Turn Edit & Seamless Extend Studio ($0 Wan 2.2 / LTX Auto-Chain OR Omni 1.2) */}
+          {/* Universal Turn-by-Turn Edit & Seamless Extend Studio */}
           <div
             data-testid="director-turn-panel"
-            className={`space-y-2 p-2.5 rounded-xl border ${
-              shot.omniInteractionId
-                ? 'bg-sky-500/10 border-sky-500/30'
-                : 'bg-emerald-500/8 border-emerald-500/30'
-            }`}
+            className="space-y-2.5 p-3.5 rounded-[16px] bg-white/5 border border-white/15"
           >
-            <div
-              className={`text-[11px] font-semibold flex items-center justify-between gap-1 ${
-                shot.omniInteractionId ? 'text-sky-300' : 'text-emerald-300'
-              }`}
-            >
-              <span className="flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
+            <div className="text-[12px] font-medium text-white flex items-center justify-between gap-1">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 stroke-[1.6]" />
                 {shot.omniInteractionId
                   ? 'Omni 1.2 Turn-by-Turn Edit / Extend'
-                  : 'Director Turn-by-Turn Edit & Extend ($0)'}
+                  : 'Director Turn-by-Turn Edit ($0)'}
               </span>
               {!shot.omniInteractionId && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-200">
+                <span className="text-[10px] px-2 py-0.5 rounded-[32px] bg-white/10 text-[#29c58f] font-medium">
                   FREE
                 </span>
               )}
@@ -389,19 +382,15 @@ export function LightboxModal({
                   ? 'e.g. "Camera pulls back into neon rain, keep @MIRA exact"'
                   : 'e.g. "Change lighting to golden sunset, keep @MIRA exact"'
               }
-              className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/50 outline-none"
+              className="flow-input w-full px-3 py-2 text-[12px]"
             />
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 data-testid="free-edit-btn"
                 disabled={extracting || !turnPrompt.trim()}
                 onClick={() => void handleUniversalTurn('edit')}
-                className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-40 ${
-                  shot.omniInteractionId
-                    ? 'bg-sky-400 text-zinc-950 hover:bg-sky-300'
-                    : 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300'
-                }`}
+                className="flow-cta-primary flex-1 px-3 py-2 text-[12px] disabled:opacity-40 cursor-pointer"
               >
                 {shot.kind === 'video' ? 'Re-Direct ($0)' : 'Edit / Restyle ($0)'}
               </button>
@@ -411,25 +400,21 @@ export function LightboxModal({
                 disabled={extracting}
                 onClick={() => void handleUniversalTurn('extend')}
                 title="Auto-grabs last frame, queues seamless Wan 2.2/LTX clip, and chains it into Storyboard Cut ($0)"
-                className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-zinc-900 border hover:bg-zinc-800 disabled:opacity-40 ${
-                  shot.omniInteractionId
-                    ? 'border-sky-500/40 text-sky-200'
-                    : 'border-emerald-500/40 text-emerald-200'
-                }`}
+                className="flow-btn-glass flex-1 px-3 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer"
               >
                 {shot.omniInteractionId
                   ? 'Extend +10s'
                   : shot.kind === 'video'
-                  ? '+5s Extend Chain'
-                  : 'Animate +5s ($0)'}
+                  ? '+5s Extend'
+                  : 'Animate +5s'}
               </button>
             </div>
           </div>
 
-          {/* Per-Shot Subtitle / Caption (burned into Storyboard export + .SRT) */}
-          <div className="space-y-1.5 pt-2 border-t border-zinc-800">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-              Scene Subtitle / Caption (Burned into Export + .SRT)
+          {/* Per-Shot Subtitle / Caption */}
+          <div className="space-y-1.5 pt-3 border-t border-white/15">
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-white/50">
+              Scene Subtitle / Caption (.SRT + Burn-in)
             </label>
             <input
               type="text"
@@ -437,7 +422,7 @@ export function LightboxModal({
               value={shot.subtitle ?? ''}
               onChange={(e) => onUpdateSubtitle(shot, e.target.value)}
               placeholder='e.g. "Midnight in Manila — the rain never stops."'
-              className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-amber-500/50 outline-none"
+              className="flow-input w-full px-3 py-2 text-[12px]"
             />
           </div>
         </div>

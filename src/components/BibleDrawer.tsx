@@ -14,11 +14,11 @@ interface BibleDrawerProps {
   onInsertTag: (tag: string) => void;
 }
 
-const CATEGORY_COLORS: Record<BibleCategory, string> = {
-  character: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  location: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  prop: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-  style: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+const CATEGORY_LABELS: Record<BibleCategory, string> = {
+  character: 'Character',
+  location: 'Location',
+  prop: 'Prop',
+  style: 'Style',
 };
 
 export function BibleDrawer({
@@ -89,66 +89,77 @@ export function BibleDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
-      <div className="w-full max-w-md h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shadow-2xl">
+    <div
+      className="fixed inset-0 z-[1050] flex justify-end bg-black/75 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <aside
+        data-testid="flow-modal-surface"
+        aria-label="Character and Location Bible"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md h-full bg-[#131314] border-l border-white/15 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.9)]"
+      >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-white/15 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-amber-400" />
+            <h2 className="text-[16px] font-medium text-white flex items-center gap-2 tracking-[-0.01em]">
+              <BookOpen className="w-4 h-4 stroke-[1.6] text-white" />
               Character &amp; Location Bible
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Fixes Flow Con #1: Type <span className="text-amber-300">@TAG</span> in any prompt to auto-lock appearance, location &amp; seed.
+            <p className="text-[12px] text-white/55 mt-1 leading-[18px]">
+              Type <span className="font-mono text-white">@TAG</span> in any prompt to lock
+              identity, wardrobe, environment, and seed across scenes.
             </p>
           </div>
           <button
             type="button"
+            aria-label="Close Bible drawer"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
+            className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 stroke-[1.6]" />
           </button>
         </div>
 
         {/* New Entry Form */}
-        <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/40 space-y-2.5">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="p-5 border-b border-white/15 bg-white/[0.03] space-y-3">
+          <div className="grid grid-cols-2 gap-2.5">
             <input
               type="text"
               data-testid="bible-tag-input"
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               placeholder="@MIRA or @LOC-D"
-              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-amber-200 placeholder:text-zinc-600 focus:border-amber-500/60 outline-none"
+              className="flow-input px-3 py-2 text-[13px] font-mono"
             />
             <select
+              aria-label="Category"
               value={category}
               onChange={(e) => setCategory(e.target.value as BibleCategory)}
-              className="px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+              className="flow-input px-3 py-2 text-[13px] cursor-pointer"
             >
-              <option value="character">Character</option>
-              <option value="location">Location</option>
-              <option value="prop">Prop / Wardrobe</option>
-              <option value="style">Camera / Style</option>
+              <option value="character" className="bg-[#131314]">Character</option>
+              <option value="location" className="bg-[#131314]">Location</option>
+              <option value="prop" className="bg-[#131314]">Prop / Wardrobe</option>
+              <option value="style" className="bg-[#131314]">Camera / Style</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <input
               type="text"
               data-testid="bible-title-input"
               value={titleInput}
               onChange={(e) => setTitleInput(e.target.value)}
               placeholder="Display name (e.g. Mira)"
-              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 outline-none"
+              className="flow-input px-3 py-2 text-[13px]"
             />
             <input
               type="number"
               value={lockedSeed}
               onChange={(e) => setLockedSeed(e.target.value)}
               placeholder="Locked seed (optional)"
-              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 outline-none"
+              className="flow-input px-3 py-2 text-[13px] font-mono"
             />
           </div>
 
@@ -158,10 +169,10 @@ export function BibleDrawer({
             value={descriptor}
             onChange={(e) => setDescriptor(e.target.value)}
             placeholder="Exact locked visual traits: age, hair, outfit, lighting, camera..."
-            className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-amber-500/60 outline-none resize-none"
+            className="flow-input w-full px-3 py-2 text-[13px] resize-none"
           />
 
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 pt-0.5">
             <div className="flex items-center gap-2">
               <input
                 ref={fileInputRef}
@@ -173,16 +184,16 @@ export function BibleDrawer({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                className="flow-btn-glass flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <ImagePlus className="w-3.5 h-3.5 text-amber-400" />
-                {refImage ? 'Change Ref Still' : 'Ref Still (Optional)'}
+                <ImagePlus className="w-3.5 h-3.5 stroke-[1.6]" />
+                {refImage ? 'Change Ref' : 'Ref Still'}
               </button>
               {refImage && (
                 <img
                   src={refImage}
                   alt="Reference preview"
-                  className="w-8 h-8 rounded object-cover border border-zinc-700"
+                  className="w-8 h-8 rounded-lg object-cover border border-white/20"
                 />
               )}
             </div>
@@ -192,54 +203,52 @@ export function BibleDrawer({
               data-testid="bible-save-btn"
               disabled={saving || !normalizeTag(tagInput) || !descriptor.trim()}
               onClick={() => void handleSave()}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-400 text-zinc-950 hover:bg-amber-300 disabled:opacity-40 transition"
+              className="flow-cta-primary flex items-center gap-1.5 px-4 py-2 text-[13px] disabled:opacity-40 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 stroke-[2]" />
               Save @TAG
             </button>
           </div>
         </div>
 
         {/* Entries List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
           {entries.length === 0 ? (
-            <div className="text-center py-10 text-xs text-zinc-500">
-              No Bible tags yet. Create <span className="text-amber-300">@MIRA</span> or{' '}
-              <span className="text-sky-300">@LOC-D</span> above to stop character drift across scenes.
+            <div className="text-center py-10 text-[13px] text-white/50">
+              No Bible tags yet. Create <span className="font-mono text-white">@MIRA</span> or{' '}
+              <span className="font-mono text-white">@LOC-D</span> above to lock continuity across
+              scenes.
             </div>
           ) : (
             entries.map((entry) => (
-              <div
-                key={entry.id}
-                className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 space-y-2"
-              >
+              <div key={entry.id} className="flow-card p-3.5 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     {entry.refImageDataUrl && (
                       <img
                         src={entry.refImageDataUrl}
                         alt={entry.title}
-                        className="w-10 h-10 rounded-lg object-cover border border-zinc-700 shrink-0"
+                        className="w-10 h-10 rounded-lg object-cover border border-white/15 shrink-0"
                       />
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-bold text-amber-300 font-mono">{entry.tag}</span>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-                            CATEGORY_COLORS[entry.category]
-                          }`}
-                        >
-                          {entry.category}
+                        <span className="text-[13px] font-semibold text-white font-mono">
+                          {entry.tag}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-[32px] bg-white/10 border border-white/15 text-white/75 uppercase">
+                          {CATEGORY_LABELS[entry.category]}
                         </span>
                         {entry.lockedSeed !== undefined && (
-                          <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
-                            <Lock className="w-2.5 h-2.5" />
+                          <span className="text-[11px] text-white/55 font-mono flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5 stroke-[1.6]" />
                             {entry.lockedSeed}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-zinc-300 font-medium truncate">{entry.title}</div>
+                      <div className="text-[13px] text-white/80 font-medium truncate mt-0.5">
+                        {entry.title}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -249,7 +258,7 @@ export function BibleDrawer({
                         onInsertTag(entry.tag);
                         onClose();
                       }}
-                      className="px-2 py-1 text-[11px] font-medium rounded-md bg-amber-400/15 text-amber-200 border border-amber-400/30 hover:bg-amber-400/25"
+                      className="flow-btn-glass px-2.5 py-1 text-[11px] font-medium cursor-pointer"
                     >
                       Insert
                     </button>
@@ -257,18 +266,19 @@ export function BibleDrawer({
                       type="button"
                       onClick={() => void onDeleteEntry(entry.id)}
                       title="Delete tag"
-                      className="p-1 text-zinc-500 hover:text-rose-400"
+                      aria-label={`Delete ${entry.tag}`}
+                      className="p-1.5 rounded-full text-white/45 hover:text-[#fe6e6e] hover:bg-white/10 transition cursor-pointer"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 stroke-[1.6]" />
                     </button>
                   </div>
                 </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">{entry.descriptor}</p>
+                <p className="text-[12px] text-white/60 leading-[18px]">{entry.descriptor}</p>
               </div>
             ))
           )}
         </div>
-      </div>
+      </aside>
     </div>
   );
 }

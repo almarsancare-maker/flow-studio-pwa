@@ -117,6 +117,7 @@ export function FloatingComposer({
 
   const startInputRef = useRef<HTMLInputElement | null>(null);
   const endInputRef = useRef<HTMLInputElement | null>(null);
+  const advancedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!remixRecipe) return;
@@ -127,6 +128,27 @@ export function FloatingComposer({
     setCfgScale(remixRecipe.cfgScale);
     setDurationSec(remixRecipe.durationSec);
   }, [remixRecipe]);
+
+  useEffect(() => {
+    if (!showAdvanced) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAdvanced(false);
+    };
+    const onOutside = (e: MouseEvent) => {
+      if (advancedRef.current && !advancedRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement | null;
+        if (!target?.closest('[data-testid="toggle-recipe-btn"]')) {
+          setShowAdvanced(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onOutside);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onOutside);
+    };
+  }, [showAdvanced]);
 
   const compiled = useMemo(
     () => compilePromptWithBible(prompt, bibleEntries),
@@ -193,36 +215,41 @@ export function FloatingComposer({
   const isSeedanceVideo = mode !== 't2i' && engineSettings.activeEngine === 'seedance-byok';
 
   return (
-    <div className="pb-3 pt-1 px-3 sm:px-5 pointer-events-none">
+    <div className="pb-4 pt-1 px-4 sm:px-6 pointer-events-none">
       <div className="max-w-4xl mx-auto pointer-events-auto">
-        {/* Advanced Recipe Popover (Fix #4: Transparent Seeds, Negative Prompts, Steps, CFG) */}
+        {/* Shot Recipe Popover */}
         {showAdvanced && (
-          <div className="mb-2 rounded-2xl border border-zinc-800/90 flow-glass p-3.5 shadow-2xl space-y-3">
+          <div
+            ref={advancedRef}
+            data-testid="flow-modal-surface"
+            className="flow-modal mb-3 p-4 space-y-3"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-200">
+              <span className="text-[13px] font-medium text-white">
                 Shot Recipe Controls (Seed Lock, Negative Prompt, Steps &amp; CFG)
               </span>
               <button
                 type="button"
+                aria-label="Close recipe controls"
                 onClick={() => setShowAdvanced(false)}
-                className="text-zinc-500 hover:text-zinc-200"
+                className="p-1 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4 stroke-[1.5]" />
               </button>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Negative Prompt</label>
+                <label className="block text-[12px] text-white/65 mb-1.5">Negative Prompt</label>
                 <input
                   type="text"
                   value={negativePrompt}
                   onChange={(e) => setNegativePrompt(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none focus:border-amber-500/50"
+                  className="flow-input w-full px-3 py-2 text-[13px]"
                 />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Seed</label>
+                  <label className="block text-[12px] text-white/65 mb-1.5">Seed</label>
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
@@ -231,43 +258,44 @@ export function FloatingComposer({
                         setSeedValue(Number(e.target.value) || 0);
                         setSeedLocked(true);
                       }}
-                      className="w-full px-2 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                      className="flow-input w-full px-2 py-2 text-[12px] font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setSeedLocked((v) => !v)}
+                      data-active={seedLocked ? 'true' : 'false'}
                       title={seedLocked ? 'Seed Locked' : 'Random Seed'}
-                      className={`p-1.5 rounded-lg border ${
-                        seedLocked
-                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                      }`}
+                      className="flow-btn-glass p-2 cursor-pointer shrink-0"
                     >
-                      {seedLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                      {seedLocked ? (
+                        <Lock className="w-3.5 h-3.5 stroke-[1.6]" />
+                      ) : (
+                        <Unlock className="w-3.5 h-3.5 stroke-[1.6]" />
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => setSeedValue(Math.floor(Math.random() * 2_000_000_000))}
                       title="Roll new seed"
-                      className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      className="flow-btn-glass p-2 cursor-pointer shrink-0"
                     >
-                      <Dice5 className="w-3 h-3" />
+                      <Dice5 className="w-3.5 h-3.5 stroke-[1.6]" />
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">Steps ({steps})</label>
+                  <label className="block text-[12px] text-white/65 mb-1.5">Steps ({steps})</label>
                   <input
                     type="range"
                     min={4}
                     max={40}
                     value={steps}
                     onChange={(e) => setSteps(Number(e.target.value))}
-                    className="w-full accent-amber-400 mt-2"
+                    className="w-full accent-white mt-2.5 cursor-pointer"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-zinc-400 mb-1">CFG ({cfgScale})</label>
+                  <label className="block text-[12px] text-white/65 mb-1.5">CFG ({cfgScale})</label>
                   <input
                     type="range"
                     min={1}
@@ -275,7 +303,7 @@ export function FloatingComposer({
                     step={0.5}
                     value={cfgScale}
                     onChange={(e) => setCfgScale(Number(e.target.value))}
-                    className="w-full accent-amber-400 mt-2"
+                    className="w-full accent-white mt-2.5 cursor-pointer"
                   />
                 </div>
               </div>
@@ -283,15 +311,18 @@ export function FloatingComposer({
           </div>
         )}
 
-        {/* 1:1 Google Flow Floating Glassmorphic Composer Pill */}
-        <div className="rounded-[26px] border border-zinc-800/90 focus-within:border-zinc-600/90 flow-pill p-3 sm:p-3.5 space-y-2.5 transition-colors">
-          {/* Top Row: Flow Mode Tabs + Bible @TAG Chips */}
+        {/* Signature Google Flow Floating Obsidian Glass Composer */}
+        <div
+          data-testid="flow-composer-bar"
+          className="flow-composer-shell p-3.5 sm:p-4 space-y-3"
+        >
+          {/* Top Row: Monochrome Flow Mode Switcher + Bible @TAG Chips */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="inline-flex rounded-full bg-zinc-950/95 p-0.5 border border-zinc-800/90 max-w-full overflow-x-auto">
+            <div className="flow-pill-group inline-flex p-1 max-w-full overflow-x-auto">
               {(
                 [
                   { id: 't2i', label: 'Keyframe Still', short: 'Still', icon: ImageIcon },
-                  { id: 't2v', label: 'Text to Video', short: 'Text→Vid', icon: Clapperboard },
+                  { id: 't2v', label: 'Text to Video', short: 'Video', icon: Clapperboard },
                   { id: 'i2v', label: 'Frames to Video', short: 'Frames', icon: Film },
                 ] as const
               ).map((tab) => {
@@ -303,13 +334,13 @@ export function FloatingComposer({
                     type="button"
                     data-testid={`mode-tab-${tab.id}`}
                     onClick={() => onModeChange(tab.id)}
-                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition ${
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-[32px] text-[13px] font-medium whitespace-nowrap transition cursor-pointer ${
                       active
-                        ? 'bg-zinc-100 text-zinc-950 shadow-sm'
-                        : 'text-zinc-400 hover:text-zinc-100'
+                        ? 'bg-white text-[#121317]'
+                        : 'text-white/65 hover:text-white'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <Icon className="w-3.5 h-3.5 stroke-[1.6] shrink-0" />
                     <span className="sm:hidden">{tab.short}</span>
                     <span className="hidden sm:inline">{tab.label}</span>
                   </button>
@@ -319,14 +350,14 @@ export function FloatingComposer({
 
             {/* Quick @TAG Bar */}
             {bibleEntries.length > 0 && (
-              <div className="flex items-center gap-1 overflow-x-auto max-w-full">
+              <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
                 {bibleEntries.slice(0, 6).map((b) => (
                   <button
                     key={b.id}
                     type="button"
                     onClick={() => appendTag(b.tag)}
                     title={`Insert ${b.tag}: ${b.descriptor}`}
-                    className="px-2 py-0.5 text-[11px] font-mono rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 hover:bg-amber-500/20 shrink-0 transition"
+                    className="px-2.5 py-1 text-[11px] font-mono rounded-[32px] bg-white/5 border border-white/15 text-white/80 hover:bg-white/12 hover:border-white/25 hover:text-white shrink-0 transition cursor-pointer"
                   >
                     {b.tag}
                   </button>
@@ -335,9 +366,9 @@ export function FloatingComposer({
             )}
           </div>
 
-          {/* Google Flow First Frame -> Last Frame Slots (visible in Frames-to-Video or when a frame is loaded) */}
+          {/* First Frame -> Last Frame Slots */}
           {(mode === 'i2v' || startFrameDataUrl || endFrameDataUrl) && (
-            <div className="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-2 p-2 rounded-2xl bg-zinc-950/85 border border-zinc-800/90">
+            <div className="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-2.5 p-2.5 rounded-[16px] bg-black/45 border border-white/15">
               <input
                 ref={startInputRef}
                 type="file"
@@ -355,81 +386,81 @@ export function FloatingComposer({
 
               {/* Start Frame Slot */}
               {startFrameDataUrl ? (
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <img
                     src={startFrameDataUrl}
                     alt="Start frame"
-                    className="w-14 h-9 rounded-lg object-cover border border-amber-500/50 shrink-0"
+                    className="w-14 h-9 rounded-lg object-cover border border-white/25 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-medium text-amber-300 truncate">
-                      Start Frame Locked (Scene Continuity Active)
+                    <div className="text-[12px] font-medium text-white truncate">
+                      Start Frame Locked
                     </div>
-                    <div className="text-[10px] text-zinc-500 truncate">Opening frame of shot</div>
+                    <div className="text-[11px] text-white/50 truncate">Opening frame continuity</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onStartFrameChange(undefined)}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900"
-                    title="Clear Start Frame"
+                    aria-label="Clear Start Frame"
+                    className="p-1.5 rounded-full text-white/50 hover:text-[#fe6e6e] hover:bg-white/10 transition cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3.5 h-3.5 stroke-[1.6]" />
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => startInputRef.current?.click()}
-                  className="flex items-center gap-2 text-xs text-zinc-400 hover:text-amber-300 transition py-1 px-1.5 rounded-xl hover:bg-zinc-900/80"
+                  className="flex items-center gap-2 text-[13px] text-white/65 hover:text-white transition py-1.5 px-2 rounded-xl hover:bg-white/6 cursor-pointer"
                 >
-                  <ImagePlus className="w-4 h-4 text-amber-400 shrink-0" />
+                  <ImagePlus className="w-4 h-4 stroke-[1.5] text-white/80 shrink-0" />
                   <span className="truncate">
-                    <strong className="text-zinc-200">Start Frame</strong> — upload or Grab Last Frame
+                    <strong className="font-medium text-white">Start Frame</strong> — upload or grab
                   </span>
                 </button>
               )}
 
-              <ArrowRight className="w-3.5 h-3.5 text-zinc-600 hidden sm:block" />
+              <ArrowRight className="w-4 h-4 stroke-[1.5] text-white/35 hidden sm:block" />
 
-              {/* End Frame Slot (Google Flow First -> Last Frame Interpolation for Seedance 2.5!) */}
+              {/* End Frame Slot */}
               {endFrameDataUrl ? (
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <img
                     src={endFrameDataUrl}
                     alt="End frame"
-                    className="w-14 h-9 rounded-lg object-cover border border-violet-500/50 shrink-0"
+                    className="w-14 h-9 rounded-lg object-cover border border-white/25 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-medium text-violet-300 truncate">
+                    <div className="text-[12px] font-medium text-white truncate">
                       End Frame Locked
                     </div>
-                    <div className="text-[10px] text-zinc-500 truncate">Target ending composition</div>
+                    <div className="text-[11px] text-white/50 truncate">Target closing frame</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onEndFrameChange(undefined)}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900"
-                    title="Clear End Frame"
+                    aria-label="Clear End Frame"
+                    className="p-1.5 rounded-full text-white/50 hover:text-[#fe6e6e] hover:bg-white/10 transition cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3.5 h-3.5 stroke-[1.6]" />
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => endInputRef.current?.click()}
-                  className="flex items-center gap-2 text-xs text-zinc-500 hover:text-violet-300 transition py-1 px-1.5 rounded-xl hover:bg-zinc-900/80"
+                  className="flex items-center gap-2 text-[13px] text-white/55 hover:text-white transition py-1.5 px-2 rounded-xl hover:bg-white/6 cursor-pointer"
                 >
-                  <ImagePlus className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <ImagePlus className="w-4 h-4 stroke-[1.5] text-white/60 shrink-0" />
                   <span className="truncate">
-                    <strong className="text-zinc-300">End Frame</strong> (optional morph target)
+                    <strong className="font-medium text-white/85">End Frame</strong> (optional)
                   </span>
                 </button>
               )}
             </div>
           )}
 
-          {/* Prompt Input */}
+          {/* Prompt Textarea */}
           <div className="relative px-1">
             <textarea
               rows={2}
@@ -444,17 +475,17 @@ export function FloatingComposer({
               }}
               placeholder={
                 mode === 't2i'
-                  ? 'Describe your $0 keyframe still... Use @MIRA or @LOC-D from your Bible (Ctrl+Enter)'
+                  ? 'What do you want to create? Use @MIRA or @LOC-D from your Bible (Ctrl+Enter)'
                   : 'Direct camera motion, action & spoken "dialogue"... Use @MIRA or @LOC-D (Ctrl+Enter)'
               }
-              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 outline-none resize-none leading-relaxed pr-2"
+              className="w-full bg-transparent text-[16px] leading-[24px] text-white placeholder:text-white/50 outline-none resize-none pr-2"
             />
           </div>
 
-          {/* 1-Click Camera Motion Presets Drawer (Flow Director Controls) */}
+          {/* 1-Click Camera Motion Presets Drawer */}
           {showCameraBar && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 px-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+              <span className="text-[11px] uppercase tracking-wider text-white/45 shrink-0">
                 Camera:
               </span>
               {CAMERA_PRESETS.map((cam) => (
@@ -462,7 +493,7 @@ export function FloatingComposer({
                   key={cam.label}
                   type="button"
                   onClick={() => appendText(cam.snippet)}
-                  className="px-2.5 py-0.5 rounded-full text-[11px] bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-amber-500/40 hover:text-amber-200 shrink-0 transition"
+                  className="flow-btn-glass px-3 py-1 text-[12px] shrink-0 cursor-pointer"
                 >
                   + {cam.label}
                 </button>
@@ -470,10 +501,10 @@ export function FloatingComposer({
             </div>
           )}
 
-          {/* 1-Click Cinema Style / Look Presets Drawer ($0) */}
+          {/* 1-Click Cinema Look Presets Drawer */}
           {showStyleBar && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 px-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+              <span className="text-[11px] uppercase tracking-wider text-white/45 shrink-0">
                 Look:
               </span>
               {STYLE_PRESETS.map((st) => (
@@ -481,7 +512,7 @@ export function FloatingComposer({
                   key={st.label}
                   type="button"
                   onClick={() => appendText(st.snippet)}
-                  className="px-2.5 py-0.5 rounded-full text-[11px] bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-emerald-500/40 hover:text-emerald-200 shrink-0 transition"
+                  className="flow-btn-glass px-3 py-1 text-[12px] shrink-0 cursor-pointer"
                 >
                   + {st.label}
                 </button>
@@ -491,25 +522,25 @@ export function FloatingComposer({
 
           {/* Bible Expansion Indicator */}
           {compiled.appliedTags.length > 0 && (
-            <div className="text-[11px] bg-amber-500/8 border border-amber-500/20 rounded-xl px-2.5 py-1.5 text-amber-200/90">
+            <div className="text-[12px] bg-white/5 border border-white/15 rounded-[16px] px-3 py-2 text-white/85">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
-                  Bible Auto-Expanded: <strong>{compiled.appliedTags.join(', ')}</strong>
+                  <Sparkles className="w-3.5 h-3.5 stroke-[1.6] text-white" />
+                  Bible Auto-Expanded: <strong className="font-medium">{compiled.appliedTags.join(', ')}</strong>
                   {compiled.suggestedSeed !== undefined && !seedLocked && (
-                    <span className="text-zinc-400">· Seed locked {compiled.suggestedSeed}</span>
+                    <span className="text-white/50">· Seed {compiled.suggestedSeed}</span>
                   )}
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowExpandedPreview((v) => !v)}
-                  className="underline text-amber-300 hover:text-amber-200"
+                  className="underline underline-offset-4 text-white/80 hover:text-white cursor-pointer"
                 >
                   {showExpandedPreview ? 'Hide' : 'Preview'}
                 </button>
               </div>
               {showExpandedPreview && (
-                <p className="mt-1.5 text-zinc-300 text-[11px] leading-relaxed border-t border-amber-500/15 pt-1.5">
+                <p className="mt-2 text-white/70 text-[12px] leading-[18px] border-t border-white/10 pt-2">
                   {compiled.compiledPrompt}
                 </p>
               )}
@@ -517,14 +548,13 @@ export function FloatingComposer({
           )}
 
           {/* Bottom Controls Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-zinc-800/70">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-white/15">
             <div className="flex flex-wrap items-center gap-1.5">
-              {/* Aspect Ratio */}
               <select
                 aria-label="Aspect ratio"
                 value={aspectRatio}
                 onChange={(e) => onAspectRatioChange(e.target.value as AspectRatio)}
-                className="px-2.5 py-1 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none hover:border-zinc-700 cursor-pointer"
+                className="flow-select-pill h-9 px-3 text-[12px] font-medium cursor-pointer"
               >
                 <option value="16:9">16:9 Cinema</option>
                 <option value="9:16">9:16 Reels</option>
@@ -532,27 +562,25 @@ export function FloatingComposer({
                 <option value="21:9">21:9 Anamorphic</option>
               </select>
 
-              {/* Multi-Take Batch Variations (1x / 2x / 4x — $0) */}
               <select
                 aria-label="Takes"
                 data-testid="take-count-select"
                 value={takeCount}
                 onChange={(e) => setTakeCount(Number(e.target.value) as 1 | 2 | 4)}
                 title="Generate multiple seed variations in one click ($0)"
-                className="px-2 py-1 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none hover:border-zinc-700 cursor-pointer"
+                className="flow-select-pill h-9 px-3 text-[12px] font-medium cursor-pointer"
               >
                 <option value={1}>1× Take</option>
                 <option value={2}>2× Takes</option>
                 <option value={4}>4× Takes</option>
               </select>
 
-              {/* Duration (Video modes) */}
               {mode !== 't2i' && (
                 <select
                   aria-label="Duration"
                   value={durationSec}
                   onChange={(e) => setDurationSec(Number(e.target.value))}
-                  className="px-2.5 py-1 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none hover:border-zinc-700 cursor-pointer"
+                  className="flow-select-pill h-9 px-3 text-[12px] font-medium cursor-pointer"
                 >
                   <option value={3}>3s</option>
                   <option value={4}>4s</option>
@@ -565,94 +593,73 @@ export function FloatingComposer({
                 </select>
               )}
 
-              {/* 1-Click Magic Cinema Enhance ($0 AI Director) */}
               <button
                 type="button"
                 data-testid="magic-enhance-btn"
                 disabled={!prompt.trim() || enhancing}
                 onClick={() => void handleEnhance()}
-                title="Expand your prompt into Hollywood 35mm cinematography while keeping @TAGs intact ($0)"
-                className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border bg-amber-500/12 border-amber-500/30 text-amber-200 hover:bg-amber-500/22 disabled:opacity-40 transition"
+                title="Expand your prompt into 35mm cinematography while keeping @TAGs intact ($0)"
+                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium disabled:opacity-40 cursor-pointer"
               >
                 {enhancing ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 stroke-[1.6] animate-spin" />
                 ) : (
-                  <Wand2 className="w-3 h-3 text-amber-400" />
+                  <Wand2 className="w-3.5 h-3.5 stroke-[1.6]" />
                 )}
                 <span>Enhance</span>
               </button>
 
-              {/* Cinema Look / Style Presets Toggle */}
               <button
                 type="button"
                 data-testid="toggle-style-presets-btn"
+                data-active={showStyleBar ? 'true' : 'false'}
                 onClick={() => setShowStyleBar((v) => !v)}
-                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition ${
-                  showStyleBar
-                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                }`}
+                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <Palette className="w-3 h-3" />
+                <Palette className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Look</span>
               </button>
 
-              {/* Camera Motion Presets Toggle */}
               <button
                 type="button"
                 data-testid="toggle-camera-presets-btn"
+                data-active={showCameraBar ? 'true' : 'false'}
                 onClick={() => setShowCameraBar((v) => !v)}
-                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition ${
-                  showCameraBar
-                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                }`}
+                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <Camera className="w-3 h-3" />
+                <Camera className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Camera</span>
               </button>
 
-              {/* Recipe Popover Toggle */}
               <button
                 type="button"
+                data-testid="toggle-recipe-btn"
+                data-active={showAdvanced || seedLocked ? 'true' : 'false'}
                 onClick={() => setShowAdvanced((v) => !v)}
-                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition ${
-                  showAdvanced || seedLocked
-                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                }`}
+                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <SlidersHorizontal className="w-3 h-3" />
+                <SlidersHorizontal className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Recipe</span>
-                {seedLocked && <Lock className="w-2.5 h-2.5 text-amber-400" />}
+                {seedLocked && <Lock className="w-3 h-3 stroke-[1.8]" />}
               </button>
 
-              {/* Synced Audio Status Badge ($0 MMAudio Foley OR Omni 1.2 / Seedance 2.5) */}
               {mode !== 't2i' &&
                 (engineSettings.activeEngine === 'free-24-7' && engineSettings.freeAutoAudio ? (
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border bg-emerald-500/15 border-emerald-500/30 text-emerald-200">
-                    <Volume2 className="w-3 h-3 text-emerald-400" />
+                  <span className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 text-[12px] rounded-[32px] bg-white/5 border border-white/15 text-white/80">
+                    <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-[#29c58f]" />
                     AI Foley ($0)
                   </span>
                 ) : isOmniVideo || (isSeedanceVideo && engineSettings.seedanceAudio) ? (
-                  <span
-                    className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border ${
-                      isOmniVideo
-                        ? 'bg-sky-500/15 border-sky-500/30 text-sky-200'
-                        : 'bg-violet-500/15 border-violet-500/30 text-violet-200'
-                    }`}
-                  >
-                    <Volume2
-                      className={`w-3 h-3 ${isOmniVideo ? 'text-sky-400' : 'text-violet-400'}`}
-                    />
+                  <span className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 text-[12px] rounded-[32px] bg-white/5 border border-white/15 text-white/80">
+                    <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-[#c2e7ff]" />
                     Audio ON
                   </span>
                 ) : null)}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5 ml-auto">
               {queueCount > 0 && (
-                <span className="text-[11px] text-amber-300/90 animate-pulse">
+                <span className="text-[12px] text-white/75 animate-pulse">
                   {queueCount} active...
                 </span>
               )}
@@ -661,28 +668,22 @@ export function FloatingComposer({
                 data-testid="composer-submit-btn"
                 disabled={!prompt.trim()}
                 onClick={handleQueue}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold disabled:opacity-40 shadow-lg transition cursor-pointer ${
-                  isOmniVideo
-                    ? 'bg-gradient-to-r from-sky-400 to-cyan-300 text-zinc-950 hover:from-sky-300 hover:to-cyan-200 shadow-sky-500/25'
-                    : isSeedanceVideo
-                    ? 'bg-gradient-to-r from-violet-400 to-fuchsia-400 text-zinc-950 hover:from-violet-300 hover:to-fuchsia-300 shadow-violet-500/25'
-                    : 'bg-gradient-to-r from-amber-400 to-orange-400 text-zinc-950 hover:from-amber-300 hover:to-orange-300 shadow-amber-500/20'
-                }`}
+                className="flow-cta-primary h-12 px-6 flex items-center gap-2 text-[14px] disabled:opacity-65 cursor-pointer whitespace-nowrap"
               >
                 <span>
                   {mode === 't2i'
                     ? takeCount > 1
-                      ? `Generate ${takeCount}× Stills ($0)`
-                      : 'Generate Still ($0)'
+                      ? `Generate ${takeCount}× Stills`
+                      : 'Generate Still'
                     : isOmniVideo
                     ? 'Generate Omni 1.2'
                     : isSeedanceVideo
                     ? 'Generate Seedance'
                     : takeCount > 1
-                    ? `Generate ${takeCount}× Videos ($0)`
-                    : 'Generate Video ($0)'}
+                    ? `Generate ${takeCount}× Videos`
+                    : 'Generate Video'}
                 </span>
-                <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                <ArrowUp className="w-4 h-4 stroke-[2]" />
               </button>
             </div>
           </div>

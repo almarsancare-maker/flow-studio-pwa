@@ -16,10 +16,8 @@ function localVercelApiPlugin(): Plugin {
     '/api/omni': 'api/omni.js',
   };
 
-  return {
-    name: 'flowstudio-local-vercel-api',
-    configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
+  const attachMiddleware = (middlewares: { use: Function }) => {
+    middlewares.use(async (req: any, res: any, next: any) => {
         const rawUrl = req.url || '';
         const parsed = new URL(rawUrl, 'http://localhost');
         const relFile = routes[parsed.pathname];
@@ -68,6 +66,15 @@ function localVercelApiPlugin(): Plugin {
           res.end(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }));
         }
       });
+  };
+
+  return {
+    name: 'flowstudio-local-vercel-api',
+    configureServer(server) {
+      attachMiddleware(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      attachMiddleware(server.middlewares);
     },
   };
 }
@@ -85,8 +92,8 @@ export default defineConfig({
         short_name: 'Cabardo Studio',
         description:
           'Cabardo Studio AI Generator FREE Lifetime — AI Video & Image Studio with Character Bible, Frame Continuity, Storyboard Stitcher, and $0 Dual-GPU Engine.',
-        theme_color: '#09090b',
-        background_color: '#09090b',
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
         orientation: 'any',
         start_url: '/',

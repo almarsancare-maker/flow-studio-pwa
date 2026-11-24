@@ -162,13 +162,13 @@ export function StoryboardBar({
 
   return (
     <>
-      <div className="max-w-4xl w-full mx-auto px-3 sm:px-5 mb-1.5">
-        <div className="rounded-2xl border border-zinc-800/90 flow-glass px-3.5 py-2.5 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2 text-xs">
-              <Film className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-semibold text-zinc-100">Storyboard Cut</span>
-              <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-300">
+      <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 mb-2">
+        <div className="flow-modal p-3.5 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[13px]">
+              <Film className="w-4 h-4 stroke-[1.6] text-white" />
+              <span className="font-medium text-white">Storyboard Cut</span>
+              <span className="px-2.5 py-0.5 rounded-[32px] bg-white/8 border border-white/15 text-[11px] font-mono text-white/75">
                 {clips.length} {clips.length === 1 ? 'clip' : 'clips'} · {formatTimecode(totalSeconds)}
               </span>
             </div>
@@ -179,9 +179,9 @@ export function StoryboardBar({
                 data-testid="extend-storyboard-btn"
                 onClick={() => onExtendFinalClip(lastClip)}
                 title={`Grab last frame of ${lastClip.label} to direct the next continuous scene`}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 border border-amber-500/35 text-amber-200 hover:bg-amber-500/25 transition"
+                className="flow-btn-glass flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Extend Scene</span>
               </button>
 
@@ -191,9 +191,9 @@ export function StoryboardBar({
                   setPreviewIndex(0);
                   setPreviewOpen(true);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-zinc-900 border border-zinc-700 text-zinc-200 hover:bg-zinc-800"
+                className="flow-btn-glass flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <Play className="w-3 h-3 text-emerald-400" />
+                <Play className="w-3.5 h-3.5 stroke-[1.6]" />
                 Play Sequence
               </button>
 
@@ -201,10 +201,10 @@ export function StoryboardBar({
                 type="button"
                 data-testid="export-srt-btn"
                 onClick={handleExportSrt}
-                title="Download .SRT subtitle file for Premiere / CapCut / YouTube"
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                title="Download .SRT subtitle file"
+                className="flow-btn-glass flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium cursor-pointer"
               >
-                <Subtitles className="w-3 h-3 text-sky-400" />
+                <Subtitles className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>.SRT</span>
               </button>
 
@@ -212,17 +212,17 @@ export function StoryboardBar({
                 type="button"
                 disabled={stitching}
                 onClick={() => void handleExportStitched()}
-                className="flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-400 text-zinc-950 hover:bg-emerald-300 disabled:opacity-60"
+                className="flow-cta-primary flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] disabled:opacity-50 cursor-pointer"
               >
                 {stitching ? (
                   <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 stroke-[1.8] animate-spin" />
                     <span>{stitchPct}%</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-3 h-3" />
-                    <span>Export Stitched Video</span>
+                    <Download className="w-3.5 h-3.5 stroke-[1.8]" />
+                    <span>Export Master</span>
                   </>
                 )}
               </button>
@@ -230,21 +230,21 @@ export function StoryboardBar({
           </div>
 
           {/* Post-Production Cinema LUT, Transition & Ambient Audio Strip */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-2 text-[11px]">
-            <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-zinc-300">
-              <Palette className="w-3 h-3 text-amber-400" />
+          <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+            <label className="flow-select-pill inline-flex items-center gap-1.5 px-3 py-1">
+              <Palette className="w-3.5 h-3.5 stroke-[1.5] text-white/70" />
               <select
                 aria-label="Cinema LUT"
                 data-testid="storyboard-lut-select"
                 value={lut}
                 onChange={(e) => setLut(e.target.value as CinemaLut)}
-                className="bg-transparent outline-none cursor-pointer text-zinc-200"
+                className="bg-transparent outline-none cursor-pointer text-white/90"
               >
-                <option value="natural" className="bg-zinc-950">LUT: Natural</option>
-                <option value="teal-orange" className="bg-zinc-950">LUT: Teal &amp; Orange</option>
-                <option value="warm-35mm" className="bg-zinc-950">LUT: 35mm Warm</option>
-                <option value="noir-bw" className="bg-zinc-950">LUT: Noir B&amp;W</option>
-                <option value="cyberpunk" className="bg-zinc-950">LUT: Cyberpunk</option>
+                <option value="natural">LUT: Natural</option>
+                <option value="teal-orange">LUT: Teal &amp; Orange</option>
+                <option value="warm-35mm">LUT: 35mm Warm</option>
+                <option value="noir-bw">LUT: Noir B&amp;W</option>
+                <option value="cyberpunk">LUT: Cyberpunk</option>
               </select>
             </label>
 
@@ -252,32 +252,32 @@ export function StoryboardBar({
               aria-label="Transition"
               value={transition}
               onChange={(e) => setTransition(e.target.value as TransitionStyle)}
-              className="px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-zinc-200 outline-none cursor-pointer"
+              className="flow-select-pill px-3 py-1 outline-none cursor-pointer"
             >
-              <option value="crossfade" className="bg-zinc-950">Transition: Crossfade</option>
-              <option value="fade-black" className="bg-zinc-950">Transition: Fade Black</option>
-              <option value="cut" className="bg-zinc-950">Transition: Hard Cut</option>
+              <option value="crossfade">Transition: Crossfade</option>
+              <option value="fade-black">Transition: Fade Black</option>
+              <option value="cut">Transition: Hard Cut</option>
             </select>
 
-            <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-zinc-300">
-              <Music className="w-3 h-3 text-violet-400" />
+            <label className="flow-select-pill inline-flex items-center gap-1.5 px-3 py-1">
+              <Music className="w-3.5 h-3.5 stroke-[1.5] text-white/70" />
               <select
                 aria-label="Ambient Soundscape"
                 data-testid="storyboard-audio-select"
                 value={ambientAudio}
                 onChange={(e) => setAmbientAudio(e.target.value as AmbientAudioPreset)}
-                className="bg-transparent outline-none cursor-pointer text-zinc-200"
+                className="bg-transparent outline-none cursor-pointer text-white/90"
               >
-                <option value="none" className="bg-zinc-950">Audio: Silent / Native</option>
-                <option value="tropical-rain" className="bg-zinc-950">Audio: Tropical Rain ($0)</option>
-                <option value="neon-drone" className="bg-zinc-950">Audio: Neon Night Drone ($0)</option>
-                <option value="warm-cinema" className="bg-zinc-950">Audio: Warm Cinema Pad ($0)</option>
+                <option value="none">Audio: Silent / Native</option>
+                <option value="tropical-rain">Audio: Tropical Rain ($0)</option>
+                <option value="neon-drone">Audio: Neon Night Drone ($0)</option>
+                <option value="warm-cinema">Audio: Warm Cinema Pad ($0)</option>
               </select>
             </label>
           </div>
 
           {stitching && (
-            <div className="mb-2 text-[11px] text-emerald-300 flex items-center justify-between">
+            <div className="text-[12px] text-[#29c58f] flex items-center justify-between">
               <span>{stitchStatus}</span>
               <span className="font-mono">{stitchPct}%</span>
             </div>
@@ -301,13 +301,13 @@ export function StoryboardBar({
                     setDragId(null);
                   }}
                   onDragEnd={() => setDragId(null)}
-                  className={`shrink-0 w-32 rounded-xl border bg-zinc-900/85 overflow-hidden cursor-grab active:cursor-grabbing transition ${
+                  className={`shrink-0 w-32 rounded-[12px] border bg-white/5 overflow-hidden cursor-grab active:cursor-grabbing transition ${
                     dragId === clip.id
-                      ? 'border-amber-400 opacity-60 scale-95'
-                      : 'border-zinc-800 hover:border-zinc-600'
+                      ? 'border-white opacity-60 scale-95'
+                      : 'border-white/15 hover:border-white/30'
                   }`}
                 >
-                  <div className="relative h-16 bg-zinc-950">
+                  <div className="relative h-16 bg-black">
                     {thumb ? (
                       clip.kind === 'video' && !clip.thumbnailDataUrl ? (
                         <video
@@ -325,39 +325,40 @@ export function StoryboardBar({
                         />
                       )
                     ) : null}
-                    <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded-full bg-black/75 text-[10px] font-mono text-amber-300">
+                    <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-[32px] bg-black/65 border border-white/15 text-[10px] font-mono text-white">
                       {idx + 1}. {clip.label}
                     </span>
                     <button
                       type="button"
                       onClick={() => onRemoveClip(clip.id)}
                       title="Remove from Storyboard"
-                      className="absolute top-1 right-1 p-0.5 rounded-full bg-black/70 text-zinc-300 hover:text-rose-400"
+                      aria-label={`Remove ${clip.label}`}
+                      className="absolute top-1 right-1 p-0.5 rounded-full bg-black/65 text-white/75 hover:text-[#fe6e6e] cursor-pointer"
                     >
-                      <X className="w-2.5 h-2.5" />
+                      <X className="w-2.5 h-2.5 stroke-[1.8]" />
                     </button>
                   </div>
-                  <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-950/90">
+                  <div className="flex items-center justify-between px-1.5 py-1 bg-black/55">
                     <button
                       type="button"
                       disabled={idx === 0}
                       onClick={() => onMoveClip(clip.id, -1)}
-                      className="p-0.5 text-zinc-400 hover:text-zinc-100 disabled:opacity-25"
+                      className="p-0.5 text-white/60 hover:text-white disabled:opacity-25 cursor-pointer"
                       title="Move earlier"
                     >
-                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <ChevronLeft className="w-3.5 h-3.5 stroke-[1.6]" />
                     </button>
-                    <span className="text-[10px] text-zinc-500">
+                    <span className="text-[10px] text-white/55 font-mono">
                       {clip.kind === 'video' ? `${clip.durationSec}s` : '3s still'}
                     </span>
                     <button
                       type="button"
                       disabled={idx === clips.length - 1}
                       onClick={() => onMoveClip(clip.id, 1)}
-                      className="p-0.5 text-zinc-400 hover:text-zinc-100 disabled:opacity-25"
+                      className="p-0.5 text-white/60 hover:text-white disabled:opacity-25 cursor-pointer"
                       title="Move later"
                     >
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <ChevronRight className="w-3.5 h-3.5 stroke-[1.6]" />
                     </button>
                   </div>
                 </div>
@@ -370,24 +371,26 @@ export function StoryboardBar({
       {/* Continuous Multi-Scene Theater Player Modal */}
       {previewOpen && activeClip && activeUrl && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[1050] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setPreviewOpen(false)}
         >
           <div
-            className="w-full max-w-4xl rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-2xl"
+            data-testid="flow-modal-surface"
+            className="flow-modal w-full max-w-4xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-              <div className="text-xs font-medium text-zinc-200">
+            <div className="px-5 py-3.5 border-b border-white/15 flex items-center justify-between">
+              <div className="text-[13px] font-medium text-white">
                 Continuous Sequence Preview — Clip {previewIndex + 1}/{clips.length} (
-                <span className="text-amber-300 font-mono">{activeClip.label}</span>)
+                <span className="font-mono text-white/75">{activeClip.label}</span>)
               </div>
               <button
                 type="button"
+                aria-label="Close preview"
                 onClick={() => setPreviewOpen(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-100"
+                className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 stroke-[1.6]" />
               </button>
             </div>
             <div className="bg-black aspect-video flex items-center justify-center relative">
@@ -413,27 +416,27 @@ export function StoryboardBar({
                 />
               )}
               {activeClip.subtitle && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-xl bg-black/75 text-sm font-medium text-zinc-100 max-w-[85%] text-center">
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-[12px] bg-black/80 border border-white/15 text-[14px] font-medium text-white max-w-[85%] text-center">
                   {activeClip.subtitle}
                 </div>
               )}
             </div>
-            <div className="px-4 py-2.5 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
+            <div className="px-5 py-3 border-t border-white/15 flex items-center justify-between text-[13px] text-white/65">
               <span className="truncate max-w-xl">{activeClip.rawPrompt}</span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
                     setPreviewIndex((idx) => (idx - 1 + clips.length) % clips.length)
                   }
-                  className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 hover:text-zinc-100"
+                  className="flow-btn-glass px-3 py-1 text-[12px] cursor-pointer"
                 >
                   Prev
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreviewIndex((idx) => (idx + 1) % clips.length)}
-                  className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 hover:text-zinc-100"
+                  className="flow-btn-glass px-3 py-1 text-[12px] cursor-pointer"
                 >
                   Next
                 </button>

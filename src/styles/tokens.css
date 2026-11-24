@@ -1,0 +1,349 @@
+/* ============================================================================
+ * Authoritative Design Tokens — 1:1 Parity with https://flow.google.com/about
+ * Self-hosted SIL OFL 1.1 Plus Jakarta Sans (zero external CDN hotlinking)
+ * ============================================================================ */
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans-700.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Core Surface Hierarchy (extracted from flow.google.com/about) */
+  --flow-bg-canvas: #000000;
+  --flow-bg-surface: #131314;
+  --flow-bg-elevated: rgba(22, 23, 24, 0.9);
+  --flow-bg-card: rgba(255, 255, 255, 0.05);
+  --flow-bg-card-hover: rgba(255, 255, 255, 0.08);
+  --flow-bg-glass-btn: rgba(0, 0, 0, 0.35);
+  --flow-bg-glass-btn-hover: rgba(255, 255, 255, 0.12);
+  --flow-bg-glass-pill: rgba(0, 0, 0, 0.4);
+  --flow-bg-scrim-overlay: rgba(0, 0, 0, 0.78);
+  --flow-bg-cta-primary: #ffffff;
+  --flow-bg-cta-primary-hover: rgba(255, 255, 255, 0.88);
+
+  /* Text / Ink Hierarchy */
+  --flow-fg-primary: #ffffff;
+  --flow-fg-secondary: #e3e3e3;
+  --flow-fg-muted: rgba(255, 255, 255, 0.75);
+  --flow-fg-subtle: rgba(255, 255, 255, 0.5);
+  --flow-fg-on-primary: #121317;
+
+  /* Hairline Borders & Micro-Rings */
+  --flow-border-card: rgba(255, 255, 255, 0.15);
+  --flow-border-control: rgba(255, 255, 255, 0.2);
+  --flow-border-pill: rgba(255, 255, 255, 0.25);
+  --flow-ring-glass: 0 0 0 1.25px rgba(230, 234, 240, 0.12);
+
+  /* Semantic Accents (from flow.google.com tokens-ref.json) */
+  --flow-accent-focus: #9e9eff;
+  --flow-accent-blue: #2b6ad2;
+  --flow-accent-ice: #c2e7ff;
+  --flow-accent-ice-ink: #001d35;
+  --flow-status-success: #29c58f;
+  --flow-status-danger: #fe6e6e;
+  --flow-status-danger-bg: rgba(178, 47, 37, 0.22);
+
+  /* Gradients & Scrims */
+  --flow-scrim-header: linear-gradient(180deg, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.3) 60%, rgba(0, 0, 0, 0));
+  --flow-scrim-bottom: linear-gradient(0deg, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.78) 68%, rgba(0, 0, 0, 0) 100%);
+  --flow-scrim-tile: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.04) 20%, rgba(0, 0, 0, 0.12) 40%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0.4) 80%, rgba(0, 0, 0, 0.5));
+  --flow-ambient-glow:
+    radial-gradient(100% 60% at 50% 0%, rgba(44, 83, 114, 0.22) 0%, rgba(0, 0, 0, 0) 65%),
+    radial-gradient(80% 40% at 50% 0%, rgba(18, 30, 42, 0.34) 0%, rgba(0, 0, 0, 0) 60%);
+
+  /* Radii */
+  --flow-radius-sm: 8px;
+  --flow-radius-md: 12px;
+  --flow-radius-card: 16px;
+  --flow-radius-modal: 24px;
+  --flow-radius-cta: 32px;
+  --flow-radius-pill: 120px;
+
+  /* Shadows & Blur */
+  --flow-shadow-card: 0 16px 32px -8px rgba(0, 0, 0, 0.5);
+  --flow-shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+  --flow-blur-control: blur(3.75px);
+  --flow-blur-panel: blur(40px);
+  --flow-blur-overlay: blur(56px);
+
+  /* Typography */
+  --flow-font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --flow-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Motion */
+  --flow-ease-ui: ease-in-out;
+  --flow-ease-flow: cubic-bezier(0.22, 1, 0.36, 1);
+  --flow-duration-fast: 0.2s;
+  --flow-duration-med: 0.3s;
+
+  /* Layout Chrome */
+  --flow-header-height: 80px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    background-color: var(--flow-bg-canvas);
+    color: var(--flow-fg-primary);
+    font-family: var(--flow-font-sans);
+    font-size: 16px;
+    line-height: 24px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(194, 231, 255, 0.28);
+    color: #ffffff;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--flow-accent-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Flow Surface Primitives */
+.flow-shell {
+  min-height: 100vh;
+  background-color: var(--flow-bg-canvas);
+  background-image: var(--flow-ambient-glow);
+  background-attachment: fixed;
+  color: var(--flow-fg-primary);
+}
+
+.flow-header {
+  height: var(--flow-header-height);
+  background-color: rgba(0, 0, 0, 0);
+  background-image: var(--flow-scrim-header);
+  z-index: 1000;
+}
+
+.flow-nav-link {
+  color: var(--flow-fg-primary);
+  opacity: 0.5;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  transition: opacity var(--flow-duration-fast) var(--flow-ease-ui);
+}
+
+.flow-nav-link:hover {
+  opacity: 0.75;
+}
+
+.flow-nav-link[data-active="true"] {
+  opacity: 1;
+}
+
+.flow-cta-primary {
+  background-color: var(--flow-bg-cta-primary);
+  color: var(--flow-fg-on-primary);
+  border: 1px solid var(--flow-border-control);
+  border-radius: var(--flow-radius-cta);
+  font-weight: 500;
+  transition:
+    background-color var(--flow-duration-fast) var(--flow-ease-ui),
+    border-color var(--flow-duration-fast) var(--flow-ease-ui),
+    opacity var(--flow-duration-fast) var(--flow-ease-ui);
+}
+
+.flow-cta-primary:hover:not(:disabled) {
+  background-color: var(--flow-bg-cta-primary-hover);
+}
+
+.flow-btn-glass {
+  background-color: var(--flow-bg-glass-btn);
+  color: var(--flow-fg-primary);
+  border: 1px solid var(--flow-border-control);
+  border-radius: var(--flow-radius-cta);
+  box-shadow: var(--flow-ring-glass);
+  backdrop-filter: var(--flow-blur-control);
+  -webkit-backdrop-filter: var(--flow-blur-control);
+  transition:
+    background-color var(--flow-duration-fast) var(--flow-ease-ui),
+    border-color var(--flow-duration-fast) var(--flow-ease-ui),
+    color var(--flow-duration-fast) var(--flow-ease-ui);
+}
+
+.flow-btn-glass:hover:not(:disabled) {
+  background-color: var(--flow-bg-glass-btn-hover);
+  border-color: var(--flow-border-pill);
+}
+
+.flow-btn-glass[data-active="true"] {
+  background-color: var(--flow-bg-cta-primary);
+  color: var(--flow-fg-on-primary);
+  border-color: var(--flow-border-control);
+  box-shadow: none;
+}
+
+.flow-pill-group {
+  background-color: var(--flow-bg-glass-pill);
+  border: 1px solid var(--flow-border-pill);
+  border-radius: var(--flow-radius-pill);
+  backdrop-filter: var(--flow-blur-control);
+  -webkit-backdrop-filter: var(--flow-blur-control);
+}
+
+.flow-card {
+  background-color: var(--flow-bg-card);
+  border: 1px solid var(--flow-border-card);
+  border-radius: var(--flow-radius-card);
+  box-shadow: var(--flow-shadow-card);
+  transition:
+    background-color var(--flow-duration-fast) var(--flow-ease-ui),
+    border-color var(--flow-duration-fast) var(--flow-ease-ui),
+    transform var(--flow-duration-fast) var(--flow-ease-flow);
+}
+
+.flow-card:hover {
+  background-color: var(--flow-bg-card-hover);
+  border-color: var(--flow-border-pill);
+}
+
+.flow-composer-shell {
+  background-color: rgba(19, 19, 20, 0.88);
+  border: 1px solid var(--flow-border-pill);
+  border-radius: var(--flow-radius-cta);
+  box-shadow: var(--flow-shadow-float);
+  backdrop-filter: var(--flow-blur-panel);
+  -webkit-backdrop-filter: var(--flow-blur-panel);
+  transition: border-color var(--flow-duration-fast) var(--flow-ease-ui);
+}
+
+.flow-composer-shell:focus-within {
+  border-color: rgba(255, 255, 255, 0.38);
+}
+
+.flow-modal {
+  background-color: var(--flow-bg-surface);
+  border: 1px solid var(--flow-border-card);
+  border-radius: var(--flow-radius-modal);
+  box-shadow: var(--flow-shadow-float);
+}
+
+.flow-input {
+  background-color: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--flow-border-card);
+  border-radius: var(--flow-radius-md);
+  color: var(--flow-fg-primary);
+  transition: border-color var(--flow-duration-fast) var(--flow-ease-ui);
+}
+
+.flow-input::placeholder {
+  color: var(--flow-fg-subtle);
+}
+
+.flow-input:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+  outline: none;
+}
+
+.flow-input:focus-visible {
+  outline: 2px solid var(--flow-accent-focus);
+  outline-offset: 1px;
+}
+
+.flow-select-pill {
+  background-color: var(--flow-bg-glass-btn);
+  border: 1px solid var(--flow-border-control);
+  border-radius: var(--flow-radius-cta);
+  color: var(--flow-fg-secondary);
+  transition:
+    border-color var(--flow-duration-fast) var(--flow-ease-ui),
+    background-color var(--flow-duration-fast) var(--flow-ease-ui);
+}
+
+.flow-select-pill:hover {
+  border-color: var(--flow-border-pill);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.flow-select-pill option {
+  background-color: var(--flow-bg-surface);
+  color: var(--flow-fg-primary);
+}
+
+.flow-tile-scrim {
+  background-image: var(--flow-scrim-tile);
+}
+
+.flow-bottom-dock {
+  background-image: var(--flow-scrim-bottom);
+}
+
+/* Minimal dark scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.36);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

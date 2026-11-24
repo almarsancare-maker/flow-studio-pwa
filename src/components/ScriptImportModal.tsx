@@ -56,40 +56,43 @@ export function ScriptImportModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+      className="fixed inset-0 z-[1050] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl max-h-[88vh] rounded-2xl border border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden shadow-2xl"
+        data-testid="flow-modal-surface"
+        className="flow-modal w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-white/15 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-sky-400" />
+            <h2 className="text-[16px] font-medium text-white flex items-center gap-2 tracking-[-0.01em]">
+              <FileText className="w-4 h-4 stroke-[1.6] text-white" />
               Bulk Script / Shot-List Importer
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Fixes Flow Con #7: Paste multi-scene prompts (<code className="text-zinc-300">S1:</code>,{' '}
-              <code className="text-zinc-300">SH02 -</code>, <code className="text-zinc-300">[16:9]</code>,{' '}
-              <code className="text-zinc-300">[5s]</code>, <code className="text-zinc-300">[t2v]</code>,{' '}
-              <code className="text-amber-300">@TAG</code>) and queue all at once.
+            <p className="text-[12px] text-white/55 mt-1 leading-[18px]">
+              Paste multi-scene prompts (<code className="font-mono text-white/80">S1:</code>,{' '}
+              <code className="font-mono text-white/80">[16:9]</code>,{' '}
+              <code className="font-mono text-white/80">[5s]</code>,{' '}
+              <code className="font-mono text-white/80">[t2v]</code>,{' '}
+              <code className="font-mono text-white">@TAG</code>) and queue all shots in one batch.
             </p>
           </div>
           <button
             type="button"
+            aria-label="Close script importer"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
+            className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 stroke-[1.6]" />
           </button>
         </div>
 
-        <div className="p-5 flex-1 overflow-y-auto space-y-4">
+        <div className="p-6 flex-1 overflow-y-auto space-y-4">
           {/* Free ($0) AI Storyboard Script Director */}
-          <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-3 space-y-2">
-            <div className="text-xs font-semibold text-amber-200 flex items-center gap-1.5">
-              <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+          <div className="rounded-[16px] border border-white/15 bg-white/5 p-4 space-y-2.5">
+            <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+              <Wand2 className="w-4 h-4 stroke-[1.6]" />
               AI Film Script Director ($0 — Turn 1 Story Idea Into a Full Multi-Shot Script)
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -102,28 +105,33 @@ export function ScriptImportModal({
                   if (e.key === 'Enter') void handleAutoWrite();
                 }}
                 placeholder="e.g. A young artist discovers a mysterious glowing letter in a rainy Manila dorm..."
-                className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500/50 outline-none"
+                className="flow-input flex-1 px-3 py-2 text-[13px]"
               />
               <button
                 type="button"
                 data-testid="auto-write-script-btn"
                 disabled={!premise.trim() || writing}
                 onClick={() => void handleAutoWrite()}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300 disabled:opacity-40 shrink-0"
+                className="flow-cta-primary flex items-center justify-center gap-1.5 px-4 py-2 text-[13px] disabled:opacity-40 shrink-0 cursor-pointer"
               >
-                {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                {writing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="w-3.5 h-3.5 stroke-[1.7]" />
+                )}
                 Auto-Write Script
               </button>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-zinc-400">Default Mode:</span>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className="text-white/60">Default Mode:</span>
               <select
+                aria-label="Default script shot mode"
                 value={defaultMode}
                 onChange={(e) => setDefaultMode(e.target.value as GenerationMode)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none"
+                className="flow-select-pill px-3 py-1.5 text-[12px] cursor-pointer"
               >
                 <option value="t2i">Keyframe Still (Recommended Stage 1)</option>
                 <option value="t2v">Text to Video</option>
@@ -134,9 +142,9 @@ export function ScriptImportModal({
               type="button"
               data-testid="load-example-script-btn"
               onClick={() => setRawText(EXAMPLE_SCRIPT)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-sky-300 bg-sky-500/10 border border-sky-500/25 hover:bg-sky-500/20"
+              className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] font-medium cursor-pointer"
             >
-              <Sparkles className="w-3 h-3" />
+              <Sparkles className="w-3.5 h-3.5 stroke-[1.6]" />
               Load Example 3-Shot Script
             </button>
           </div>
@@ -147,40 +155,43 @@ export function ScriptImportModal({
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder="Paste your episode shot list here...&#10;S1: [16:9] [image] Establishing shot of @LOC-D&#10;S2: [16:9] [5s] [t2v] @MIRA walks past neon doorway"
-            className="w-full p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 text-xs font-mono text-zinc-200 placeholder:text-zinc-600 focus:border-sky-500/50 outline-none resize-y"
+            className="flow-input w-full p-3.5 text-[12px] font-mono resize-y"
           />
 
           {/* Live Parsed Shot Preview Table */}
           {parsed.length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                <ListVideo className="w-3.5 h-3.5 text-amber-400" />
+              <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                <ListVideo className="w-4 h-4 stroke-[1.6]" />
                 Parsed {parsed.length} {parsed.length === 1 ? 'Shot' : 'Shots'} Ready to Queue
               </div>
-              <div className="rounded-xl border border-zinc-800 divide-y divide-zinc-800/80 bg-zinc-900/40 max-h-52 overflow-y-auto">
+              <div className="rounded-[16px] border border-white/15 divide-y divide-white/10 bg-white/[0.03] max-h-52 overflow-y-auto">
                 {parsed.map((item, idx) => (
-                  <div key={idx} className="px-3 py-2 flex items-start justify-between gap-3 text-xs">
+                  <div
+                    key={idx}
+                    className="px-3.5 py-2.5 flex items-start justify-between gap-3 text-[12px]"
+                  >
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-mono font-bold text-[10px]">
+                      <span className="px-2 py-0.5 rounded-[32px] bg-white/10 text-white font-mono font-medium text-[10px]">
                         {item.label}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 uppercase text-[10px]">
+                      <span className="px-2 py-0.5 rounded-[32px] bg-white/5 border border-white/15 text-white/75 uppercase text-[10px]">
                         {item.mode}
                       </span>
                       {item.aspectRatio && (
-                        <span className="text-[10px] text-zinc-400">{item.aspectRatio}</span>
+                        <span className="text-[11px] text-white/55">{item.aspectRatio}</span>
                       )}
                       {item.durationSec && (
-                        <span className="text-[10px] text-zinc-400">{item.durationSec}s</span>
+                        <span className="text-[11px] text-white/55">{item.durationSec}s</span>
                       )}
                     </div>
-                    <div className="flex-1 text-zinc-300 line-clamp-2">{item.prompt}</div>
+                    <div className="flex-1 text-white/80 line-clamp-2">{item.prompt}</div>
                     {item.detectedTags.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
                         {item.detectedTags.map((t) => (
                           <span
                             key={t}
-                            className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 font-mono text-[10px]"
+                            className="px-1.5 py-0.5 rounded-[32px] bg-white/10 text-white font-mono text-[10px]"
                           >
                             {t}
                           </span>
@@ -194,15 +205,15 @@ export function ScriptImportModal({
           )}
         </div>
 
-        <div className="px-5 py-3.5 border-t border-zinc-800 flex items-center justify-between bg-zinc-950">
-          <span className="text-xs text-zinc-500">
+        <div className="px-6 py-4 border-t border-white/15 flex items-center justify-between gap-3">
+          <span className="text-[12px] text-white/50">
             All detected @TAGs auto-expand from your Bible during generation.
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-zinc-200"
+              className="flow-btn-glass px-4 py-2 text-[13px] font-medium cursor-pointer"
             >
               Cancel
             </button>
@@ -215,7 +226,7 @@ export function ScriptImportModal({
                 setRawText('');
                 onClose();
               }}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+              className="flow-cta-primary px-5 py-2 text-[13px] disabled:opacity-40 cursor-pointer"
             >
               Queue All {parsed.length} {parsed.length === 1 ? 'Shot' : 'Shots'}
             </button>

@@ -162,56 +162,60 @@ export function EngineModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+      className="fixed inset-0 z-[1050] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl max-h-[92vh] rounded-2xl border border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden shadow-2xl"
+        data-testid="flow-modal-surface"
+        className="flow-modal w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-white/15 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-[16px] font-medium text-white flex items-center gap-2 tracking-[-0.01em]">
+              <Cpu className="w-4 h-4 stroke-[1.6] text-white" />
               Cabardo Studio Compute — 100% Free Forever ($0 Default)
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Zero credit card or API key needed. Run open-weight FLUX.1-dev, SD 3.5 Large, Wan 2.2 14B, LTX-Video &amp; Synced AI Foley (MMAudio) for $0 forever.
+            <p className="text-[13px] text-white/55 mt-1 leading-[19px]">
+              Zero credit card or API key required. Run open-weight FLUX.1-dev, SD 3.5 Large, Wan
+              2.2 14B, LTX-Video &amp; Synced AI Foley (MMAudio) for $0 forever.
             </p>
           </div>
           <button
             type="button"
+            aria-label="Close compute modal"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
+            className="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 stroke-[1.6]" />
           </button>
         </div>
 
-        <div className="p-5 overflow-y-auto space-y-4">
+        <div className="p-6 overflow-y-auto space-y-4">
           {/* Primary Hero Cards: 2 100% Free Forever Engines */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
               data-testid="select-engine-free"
               onClick={() => setDraft({ ...draft, activeEngine: 'free-24-7' })}
-              className={`text-left p-3.5 rounded-xl border transition ${
+              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${
                 draft.activeEngine === 'free-24-7'
-                  ? 'border-amber-400/70 bg-amber-500/12 shadow-lg shadow-amber-500/10'
-                  : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                  ? 'border-white bg-white/10'
+                  : 'border-white/15 bg-white/5 hover:border-white/25'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                  Engine 1: Free 24/7 Cloud
+                <span className="text-[14px] font-medium text-white flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 stroke-[1.6] shrink-0" />
+                  Free 24/7 Cloud
                 </span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                  $0 FOREVER · NO KEY
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-[32px] bg-white/10 text-[#29c58f] border border-white/15 shrink-0">
+                  $0 FOREVER
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                FLUX.1-dev Pro + SD 3.5 Large + Wan 2.2 14B (First→Last Frame &amp; FP8) + LTX-Video + MMAudio Synced AI Foley.
+              <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
+                FLUX.1-dev Pro + SD 3.5 Large + Wan 2.2 14B (First→Last Frame &amp; FP8) + LTX-Video
+                + MMAudio Synced AI Foley.
               </p>
             </button>
 
@@ -219,39 +223,40 @@ export function EngineModal({
               type="button"
               data-testid="select-engine-colab"
               onClick={() => setDraft({ ...draft, activeEngine: 'colab-t4' })}
-              className={`text-left p-3.5 rounded-xl border transition ${
+              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${
                 draft.activeEngine === 'colab-t4'
-                  ? 'border-emerald-400/70 bg-emerald-500/12 shadow-lg shadow-emerald-500/10'
-                  : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                  ? 'border-white bg-white/10'
+                  : 'border-white/15 bg-white/5 hover:border-white/25'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4 text-emerald-400 shrink-0" />
-                  Engine 2: Free Google Colab T4
+                <span className="text-[14px] font-medium text-white flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 stroke-[1.6] shrink-0" />
+                  Free Google Colab T4
                 </span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-[32px] bg-white/10 text-[#29c58f] border border-white/15 shrink-0">
                   $0 · 16 GB GPU
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                Dedicated free NVIDIA T4 16 GB GPU: SDXL, CogVideoX-2B, LTX-Video &amp; Wan 2.1 with zero public queue.
+              <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
+                Dedicated free NVIDIA T4 16 GB GPU: SDXL, CogVideoX-2B, LTX-Video &amp; Wan 2.1 with
+                zero public queue.
               </p>
             </button>
           </div>
 
           {/* Engine 1 Config ($0 Always-On Open-Weight Cinema Suite) */}
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/15 p-3.5 space-y-3">
+          <div className="rounded-[16px] border border-white/15 bg-white/[0.04] p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-emerald-200 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                Engine 1: Free 24/7 Cloud Options ($0 Always-On)
+              <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 stroke-[1.6] text-[#29c58f]" />
+                Free 24/7 Cloud Options ($0 Always-On)
               </div>
-              <span className="text-[10px] text-emerald-300/80">100% Open-Weight · No Paywall</span>
+              <span className="text-[11px] text-white/50">Open-Weight · No Paywall</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">
+                <label className="block text-[12px] text-white/60 mb-1.5">
                   Free Keyframe Image Model ($0)
                 </label>
                 <select
@@ -260,16 +265,16 @@ export function EngineModal({
                   onChange={(e) =>
                     setDraft({ ...draft, freeImageModel: e.target.value as FreeImageModel })
                   }
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
-                  <option value="flux">FLUX.1-schnell (Fast HD ZeroGPU · Default)</option>
-                  <option value="flux-dev">FLUX.1-dev Pro (Flagship Cinema Photoreal · $0)</option>
-                  <option value="sd35-turbo">Stability SD 3.5 Large Turbo (Ultra Crisp · $0)</option>
-                  <option value="turbo">Pollinations Turbo (Instant 2s Drafts · $0)</option>
+                  <option value="flux" className="bg-[#131314]">FLUX.1-schnell (Fast HD ZeroGPU · Default)</option>
+                  <option value="flux-dev" className="bg-[#131314]">FLUX.1-dev Pro (Flagship Cinema Photoreal · $0)</option>
+                  <option value="sd35-turbo" className="bg-[#131314]">Stability SD 3.5 Large Turbo (Ultra Crisp · $0)</option>
+                  <option value="turbo" className="bg-[#131314]">Pollinations Turbo (Instant 2s Drafts · $0)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">
+                <label className="block text-[12px] text-white/60 mb-1.5">
                   Free Video Cascade ($0)
                 </label>
                 <select
@@ -280,68 +285,72 @@ export function EngineModal({
                       freeVideoFallback: e.target.value as 'hf-ltx-space' | 'ken-burns-local',
                     })
                   }
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
-                  <option value="hf-ltx-space">
-                    Multi-Space Wan 2.2 14B + LTX-Video ($0 Cascade) → Director Motion
+                  <option value="hf-ltx-space" className="bg-[#131314]">
+                    Wan 2.2 14B + LTX-Video ($0 Cascade)
                   </option>
-                  <option value="ken-burns-local">Instant 2-Stage Keyframe + Cinema Motion</option>
+                  <option value="ken-burns-local" className="bg-[#131314]">
+                    Instant 2-Stage Keyframe + Cinema Motion
+                  </option>
                 </select>
               </div>
             </div>
 
-            <label className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-950/90 border border-emerald-500/25 text-xs text-zinc-200 cursor-pointer">
+            <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[12px] bg-black/45 border border-white/15 text-[12px] text-white/85 cursor-pointer">
               <input
                 type="checkbox"
                 data-testid="free-auto-audio-toggle"
                 checked={draft.freeAutoAudio}
                 onChange={(e) => setDraft({ ...draft, freeAutoAudio: e.target.checked })}
-                className="accent-emerald-400"
+                className="accent-white"
               />
-              <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <Volume2 className="w-4 h-4 stroke-[1.6] text-[#29c58f] shrink-0" />
               <span>
-                <strong className="text-emerald-300">Auto-Sync AI Foley &amp; Sound Effects ($0 MMAudio)</strong>{' '}
-                — automatically analyzes every generated video frame and muxes realistic synced audio.
+                <strong className="font-medium text-white">
+                  Auto-Sync AI Foley &amp; Sound Effects ($0 MMAudio)
+                </strong>{' '}
+                — analyzes generated video frames and muxes realistic synced audio.
               </span>
             </label>
           </div>
 
           {/* Engine 2 Config (Colab T4 Bridge) */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 space-y-3">
+          <div className="rounded-[16px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-zinc-200">
-                Engine 2: Google Colab T4 16 GB Tunnel Setup ($0 Dedicated GPU)
+              <div className="text-[13px] font-medium text-white">
+                Google Colab T4 16 GB Tunnel Setup ($0 Dedicated GPU)
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <a
                   href="https://colab.research.google.com/github/almarsancare-maker/flow-studio-pwa/blob/main/colab/FlowStudio_Colab_T4_Backend.ipynb"
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-950 bg-emerald-400 hover:bg-emerald-300"
+                  className="flow-cta-primary flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
                 >
-                  1-Click Open in Colab
-                  <ExternalLink className="w-3 h-3" />
+                  Open in Colab
+                  <ExternalLink className="w-3 h-3 stroke-[1.8]" />
                 </a>
                 <a
                   href="/FlowStudio_Colab_T4_Backend.ipynb"
                   download="FlowStudio_Colab_T4_Backend.ipynb"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800"
+                  className="flow-btn-glass flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
                 >
-                  <Download className="w-3 h-3" />
-                  Download Colab Notebook
+                  <Download className="w-3 h-3 stroke-[1.6]" />
+                  Download Notebook
                 </a>
               </div>
             </div>
 
-            <ol className="text-[11px] text-zinc-400 space-y-1 list-decimal list-inside">
+            <ol className="text-[12px] text-white/60 space-y-1 list-decimal list-inside leading-[18px]">
               <li>
-                Click <strong className="text-emerald-300">1-Click Open in Colab</strong> above and confirm Runtime → T4 GPU.
+                Open the notebook in Colab and confirm <strong className="text-white font-medium">Runtime → T4 GPU</strong>.
               </li>
               <li>
-                Click <strong className="text-zinc-200">Runtime → Run all</strong> (~45s — code is collapsed cleanly into 2 Play cards).
+                Run <strong className="text-white font-medium">Runtime → Run all</strong> (~45s).
               </li>
               <li>
-                Paste the printed <code className="text-emerald-300">https://*.trycloudflare.com</code> URL below and click Test Connection.
+                Paste the <code className="font-mono text-white/85">https://*.trycloudflare.com</code> URL below and click Test Connection.
               </li>
             </ol>
 
@@ -351,13 +360,13 @@ export function EngineModal({
                 value={draft.colabUrl}
                 onChange={(e) => setDraft({ ...draft, colabUrl: e.target.value })}
                 placeholder="https://your-random-slug.trycloudflare.com"
-                className="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-zinc-800 text-emerald-200 placeholder:text-zinc-600 focus:border-emerald-500/50 outline-none"
+                className="flow-input flex-1 px-3 py-2 text-[12px] font-mono"
               />
               <button
                 type="button"
                 disabled={testingColab || !draft.colabUrl.trim()}
                 onClick={() => void handleTestColab()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-700 text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                className="flow-btn-glass flex items-center gap-1.5 px-4 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer shrink-0"
               >
                 {testingColab ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 Test Connection
@@ -366,15 +375,15 @@ export function EngineModal({
 
             {colabHealth && (
               <div
-                className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+                className={`flex items-center gap-2 text-[12px] px-3.5 py-2.5 rounded-[12px] border ${
                   colabHealth.online
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                    ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                    : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
                 }`}
               >
                 {colabHealth.online ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
                     <span>
                       Connected: <strong>{colabHealth.gpuName}</strong> ({colabHealth.vramFreeGb}/
                       {colabHealth.vramTotalGb} GB VRAM free)
@@ -382,7 +391,7 @@ export function EngineModal({
                   </>
                 ) : (
                   <>
-                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
                     <span>{colabHealth.error || 'Could not reach Colab tunnel.'}</span>
                   </>
                 )}
@@ -391,7 +400,7 @@ export function EngineModal({
 
             <div className="grid sm:grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Colab Image Model</label>
+                <label className="block text-[12px] text-white/60 mb-1.5">Colab Image Model</label>
                 <select
                   value={draft.colabModelImage}
                   onChange={(e) =>
@@ -400,14 +409,14 @@ export function EngineModal({
                       colabModelImage: e.target.value as EngineSettings['colabModelImage'],
                     })
                   }
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
-                  <option value="sdxl-turbo">SDXL-Turbo (~2s per keyframe)</option>
-                  <option value="sdxl-base">SDXL 1.0 Base (1024px Photorealistic)</option>
+                  <option value="sdxl-turbo" className="bg-[#131314]">SDXL-Turbo (~2s per keyframe)</option>
+                  <option value="sdxl-base" className="bg-[#131314]">SDXL 1.0 Base (1024px Photorealistic)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Colab Video Model</label>
+                <label className="block text-[12px] text-white/60 mb-1.5">Colab Video Model</label>
                 <select
                   value={draft.colabModelVideo}
                   onChange={(e) =>
@@ -416,62 +425,62 @@ export function EngineModal({
                       colabModelVideo: e.target.value as EngineSettings['colabModelVideo'],
                     })
                   }
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
-                  <option value="cogvideox-2b">CogVideoX-2B (Best T4 16GB T2V)</option>
-                  <option value="ltx-video">LTX-Video (Fast T2V + Start-Frame I2V)</option>
-                  <option value="wan2.1-1.3b">Wan2.1-1.3B (High-Motion Open T2V)</option>
+                  <option value="cogvideox-2b" className="bg-[#131314]">CogVideoX-2B (Best T4 16GB T2V)</option>
+                  <option value="ltx-video" className="bg-[#131314]">LTX-Video (Fast T2V + Start-Frame I2V)</option>
+                  <option value="wan2.1-1.3b" className="bg-[#131314]">Wan2.1-1.3B (High-Motion Open T2V)</option>
                 </select>
               </div>
             </div>
           </div>
 
-          {/* Collapsible Optional Paid BYOK Cloud APIs (Tucked away — never pressures user to pay) */}
-          <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/25 overflow-hidden">
+          {/* Collapsible Optional Paid BYOK Cloud APIs */}
+          <div className="rounded-[16px] border border-white/15 bg-white/[0.02] overflow-hidden">
             <button
               type="button"
               data-testid="toggle-paid-apis-btn"
               onClick={() => setShowPaidApis((v) => !v)}
-              className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-zinc-900/60 transition"
+              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition cursor-pointer"
             >
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <div className="flex items-center gap-2 text-[13px] text-white/80">
                 {showPaidApis ? (
-                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                  <ChevronDown className="w-4 h-4 stroke-[1.6] text-white/60" />
                 ) : (
-                  <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
+                  <ChevronRight className="w-4 h-4 stroke-[1.6] text-white/50" />
                 )}
-                <span className="font-medium text-zinc-300">
-                  Optional Paid Cloud APIs (BYOK — Google Gemini Omni 1.2 &amp; Seedance 2.5)
+                <span className="font-medium">
+                  Optional Paid Cloud APIs (BYOK — Gemini Omni 1.2 &amp; Seedance 2.5)
                 </span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                Not required for $0 use
+              <span className="text-[11px] px-2.5 py-0.5 rounded-[32px] bg-white/8 text-white/55">
+                Optional
               </span>
             </button>
 
             {showPaidApis && (
-              <div className="p-3.5 pt-1 space-y-3 border-t border-zinc-800/70">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-4 pt-3 space-y-3 border-t border-white/15">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     data-testid="select-engine-omni"
                     onClick={() => setDraft({ ...draft, activeEngine: 'gemini-omni' })}
-                    className={`text-left p-2.5 rounded-xl border transition ${
+                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${
                       draft.activeEngine === 'gemini-omni'
-                        ? 'border-sky-400/70 bg-sky-500/15'
-                        : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                        ? 'border-white bg-white/10'
+                        : 'border-white/15 bg-white/5 hover:border-white/25'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 stroke-[1.6] text-[#c2e7ff] shrink-0" />
                         Omni 1.2 Flash
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-200 shrink-0">
+                      <span className="text-[10px] px-2 py-0.5 rounded-[32px] bg-white/10 text-white/75 shrink-0">
                         Paid BYOK
                       </span>
                     </div>
-                    <p className="text-[10px] text-zinc-400 mt-1">
+                    <p className="text-[11px] text-white/55 mt-1">
                       Requires billed Google AI Studio key (~$0.023–$0.209/s).
                     </p>
                   </button>
@@ -480,55 +489,55 @@ export function EngineModal({
                     type="button"
                     data-testid="select-engine-seedance"
                     onClick={() => setDraft({ ...draft, activeEngine: 'seedance-byok' })}
-                    className={`text-left p-2.5 rounded-xl border transition ${
+                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${
                       draft.activeEngine === 'seedance-byok'
-                        ? 'border-violet-400/70 bg-violet-500/15'
-                        : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                        ? 'border-white bg-white/10'
+                        : 'border-white/15 bg-white/5 hover:border-white/25'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1">
-                        <Zap className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                      <span className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 stroke-[1.6] text-[#9e9eff] shrink-0" />
                         Seedance 2.5
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-200 shrink-0">
+                      <span className="text-[10px] px-2 py-0.5 rounded-[32px] bg-white/10 text-white/75 shrink-0">
                         Paid BYOK
                       </span>
                     </div>
-                    <p className="text-[10px] text-zinc-400 mt-1">
+                    <p className="text-[11px] text-white/55 mt-1">
                       Requires funded Replicate / fal.ai balance.
                     </p>
                   </button>
                 </div>
 
                 {/* Engine 3 Config: Official Google Gemini Omni 1.2 Flash */}
-                <div className="rounded-xl border border-sky-500/30 bg-sky-950/15 p-3.5 space-y-3">
+                <div className="rounded-[14px] border border-white/15 bg-black/40 p-3.5 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs font-semibold text-sky-200 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                      Engine 3: Official Google Gemini Omni 1.2 Flash (3s–15s · 360p–4K)
+                    <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 stroke-[1.6] text-[#c2e7ff]" />
+                      Google Gemini Omni 1.2 Flash (3s–15s · 360p–4K)
                     </div>
                     <a
                       href="https://aistudio.google.com/apikey"
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-sky-200 bg-sky-500/15 border border-sky-500/30 hover:bg-sky-500/25"
+                      className="flow-btn-glass flex items-center gap-1 px-3 py-1 text-[11px]"
                     >
                       Get Google AI Studio Key
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="w-3 h-3 stroke-[1.6]" />
                     </a>
                   </div>
 
                   {serverKeys.gemini && (
-                    <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border bg-emerald-500/10 border-emerald-500/30 text-emerald-200">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Encrypted Vercel Server Key active for Google Gemini API.</span>
+                    <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-white/5 text-white">
+                      <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
+                      <span>Encrypted Server Key active for Google Gemini API.</span>
                     </div>
                   )}
 
                   <div className="grid sm:grid-cols-3 gap-2.5 items-end">
                     <div>
-                      <label className="block text-[11px] text-zinc-400 mb-1">
+                      <label className="block text-[11px] text-white/60 mb-1">
                         Omni 1.2 Resolution
                       </label>
                       <select
@@ -537,17 +546,17 @@ export function EngineModal({
                         onChange={(e) =>
                           setDraft({ ...draft, omniResolution: e.target.value as OmniResolution })
                         }
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                        className="flow-input w-full px-2.5 py-2 text-[12px]"
                       >
-                        <option value="360p">360p Fast Preview (~$0.023/s)</option>
-                        <option value="720p">720p HD Default (~$0.07/s)</option>
-                        <option value="1080p">1080p Full HD (~$0.104/s)</option>
-                        <option value="4k">4K Ultra HD (~$0.209/s)</option>
+                        <option value="360p" className="bg-[#131314]">360p Fast Preview</option>
+                        <option value="720p" className="bg-[#131314]">720p HD Default</option>
+                        <option value="1080p" className="bg-[#131314]">1080p Full HD</option>
+                        <option value="4k" className="bg-[#131314]">4K Ultra HD</option>
                       </select>
                     </div>
                     <div className="sm:col-span-2 flex items-center gap-2">
                       <div className="relative flex-1">
-                        <KeyRound className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                           type="password"
                           data-testid="omni-apikey-input"
@@ -556,10 +565,10 @@ export function EngineModal({
                           onChange={(e) => setDraft({ ...draft, geminiApiKey: e.target.value })}
                           placeholder={
                             serverKeys.gemini
-                              ? 'Using encrypted server key (paste another key to override)'
+                              ? 'Using server key (paste to override)'
                               : 'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
                           }
-                          className="w-full pl-8 pr-3 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-zinc-800 text-sky-200 placeholder:text-zinc-600 focus:border-sky-500/60 outline-none"
+                          className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
                         />
                       </div>
                       <button
@@ -567,7 +576,7 @@ export function EngineModal({
                         data-testid="omni-verify-btn"
                         disabled={testingOmni || (!draft.geminiApiKey.trim() && !serverKeys.gemini)}
                         onClick={() => void handleTestOmni()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sky-500/20 border border-sky-500/40 text-sky-200 hover:bg-sky-500/30 disabled:opacity-40 shrink-0"
+                        className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40 shrink-0 cursor-pointer"
                       >
                         {testingOmni ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                         Verify Key
@@ -577,23 +586,22 @@ export function EngineModal({
 
                   {omniStatus && (
                     <div
-                      className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
                         omniStatus.valid
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                          : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                          ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                          : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
                       }`}
                     >
                       {omniStatus.valid ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
                           <span>
-                            Verified: <strong>{omniStatus.account}</strong> — Gemini Omni 1.2 Flash
-                            active!
+                            Verified: <strong>{omniStatus.account}</strong> — Gemini Omni 1.2 active!
                           </span>
                         </>
                       ) : (
                         <>
-                          <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                          <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
                           <span>{omniStatus.error}</span>
                         </>
                       )}
@@ -602,59 +610,59 @@ export function EngineModal({
                 </div>
 
                 {/* Engine 4 Config: Official ByteDance Seedance (BYOK) */}
-                <div className="rounded-xl border border-violet-500/30 bg-violet-950/15 p-3.5 space-y-3">
+                <div className="rounded-[14px] border border-white/15 bg-black/40 p-3.5 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs font-semibold text-violet-200 flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-violet-400" />
-                      Engine 4: Official ByteDance Seedance (Latest 2.5 / 2.0 BYOK)
+                    <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 stroke-[1.6] text-[#9e9eff]" />
+                      ByteDance Seedance (2.5 / 2.0 BYOK)
                     </div>
                     <div className="flex items-center gap-1.5">
                       <a
                         href="https://replicate.com/account/api-tokens"
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-violet-200 bg-violet-500/15 border border-violet-500/30 hover:bg-violet-500/25"
+                        className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px]"
                       >
-                        Get Replicate Key
-                        <ExternalLink className="w-3 h-3" />
+                        Replicate Key
+                        <ExternalLink className="w-3 h-3 stroke-[1.6]" />
                       </a>
                       <a
                         href="https://fal.ai/dashboard/keys"
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800"
+                        className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px]"
                       >
-                        Get fal.ai Key
-                        <ExternalLink className="w-3 h-3" />
+                        fal.ai Key
+                        <ExternalLink className="w-3 h-3 stroke-[1.6]" />
                       </a>
                     </div>
                   </div>
 
                   <div className="grid sm:grid-cols-3 gap-2.5">
                     <div>
-                      <label className="block text-[11px] text-zinc-400 mb-1">API Provider</label>
+                      <label className="block text-[11px] text-white/60 mb-1">API Provider</label>
                       <select
                         data-testid="seedance-provider-select"
                         value={draft.seedanceProvider}
                         onChange={(e) => handleProviderChange(e.target.value as SeedanceProvider)}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                        className="flow-input w-full px-2.5 py-2 text-[12px]"
                       >
-                        <option value="replicate">Replicate (Recommended)</option>
-                        <option value="fal">fal.ai Queue API</option>
+                        <option value="replicate" className="bg-[#131314]">Replicate (Recommended)</option>
+                        <option value="fal" className="bg-[#131314]">fal.ai Queue API</option>
                       </select>
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-zinc-400 mb-1">
+                      <label className="block text-[11px] text-white/60 mb-1">
                         Seedance Model Version
                       </label>
                       <select
                         data-testid="seedance-model-select"
                         value={draft.seedanceModel}
                         onChange={(e) => setDraft({ ...draft, seedanceModel: e.target.value })}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                        className="flow-input w-full px-2.5 py-2 text-[12px]"
                       >
                         {activeSeedanceModels.map((m) => (
-                          <option key={m.id} value={m.id}>
+                          <option key={m.id} value={m.id} className="bg-[#131314]">
                             {m.label}
                           </option>
                         ))}
@@ -664,7 +672,7 @@ export function EngineModal({
 
                   <div className="grid sm:grid-cols-3 gap-2.5 items-end">
                     <div>
-                      <label className="block text-[11px] text-zinc-400 mb-1">
+                      <label className="block text-[11px] text-white/60 mb-1">
                         Video Resolution
                       </label>
                       <select
@@ -675,31 +683,31 @@ export function EngineModal({
                             seedanceResolution: e.target.value as SeedanceResolution,
                           })
                         }
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                        className="flow-input w-full px-2.5 py-2 text-[12px]"
                       >
-                        <option value="480p">480p (Fastest / Cheapest)</option>
-                        <option value="720p">720p HD (Balanced)</option>
-                        <option value="1080p">1080p Full HD (Cinema)</option>
+                        <option value="480p" className="bg-[#131314]">480p (Fastest)</option>
+                        <option value="720p" className="bg-[#131314]">720p HD (Balanced)</option>
+                        <option value="1080p" className="bg-[#131314]">1080p Full HD</option>
                       </select>
                     </div>
-                    <label className="sm:col-span-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 cursor-pointer">
+                    <label className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-[12px] bg-black/50 border border-white/15 text-[12px] text-white/85 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={draft.seedanceAudio}
                         onChange={(e) => setDraft({ ...draft, seedanceAudio: e.target.checked })}
-                        className="accent-violet-400"
+                        className="accent-white"
                       />
-                      <Volume2 className="w-3.5 h-3.5 text-violet-400" />
+                      <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-white/75" />
                       <span>Generate Synchronized Native Audio</span>
                     </label>
                   </div>
 
                   {((draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
                     (draft.seedanceProvider === 'fal' && serverKeys.fal)) && (
-                    <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border bg-emerald-500/10 border-emerald-500/30 text-emerald-200">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-white/5 text-white">
+                      <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
                       <span>
-                        Encrypted Vercel Server Key active for{' '}
+                        Encrypted Server Key active for{' '}
                         <strong>
                           {draft.seedanceProvider === 'replicate' ? 'Replicate' : 'fal.ai'}
                         </strong>
@@ -710,7 +718,7 @@ export function EngineModal({
 
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
-                      <KeyRound className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="password"
                         data-testid="seedance-apikey-input"
@@ -720,12 +728,12 @@ export function EngineModal({
                         placeholder={
                           (draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
                           (draft.seedanceProvider === 'fal' && serverKeys.fal)
-                            ? 'Using encrypted server key (paste another key only to override)'
+                            ? 'Using server key (paste to override)'
                             : draft.seedanceProvider === 'replicate'
                             ? 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
                             : 'xxxxxxxx-xxxx-xxxx:xxxxxxxxxxxxxxxx'
                         }
-                        className="w-full pl-8 pr-3 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-zinc-800 text-violet-200 placeholder:text-zinc-600 focus:border-violet-500/60 outline-none"
+                        className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
                       />
                     </div>
                     <button
@@ -739,7 +747,7 @@ export function EngineModal({
                             : serverKeys.fal))
                       }
                       onClick={() => void handleTestSeedance()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-500/20 border border-violet-500/40 text-violet-200 hover:bg-violet-500/30 disabled:opacity-40"
+                      className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer shrink-0"
                     >
                       {testingSeedance ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                       Verify Key
@@ -748,23 +756,22 @@ export function EngineModal({
 
                   {seedanceStatus && (
                     <div
-                      className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
                         seedanceStatus.valid
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                          : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                          ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                          : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
                       }`}
                     >
                       {seedanceStatus.valid ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
                           <span>
-                            Key Verified: <strong>{seedanceStatus.account}</strong> — Seedance
-                            active!
+                            Key Verified: <strong>{seedanceStatus.account}</strong> — Seedance active!
                           </span>
                         </>
                       ) : (
                         <>
-                          <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                          <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
                           <span>{seedanceStatus.error || 'Key validation failed.'}</span>
                         </>
                       )}
@@ -776,18 +783,18 @@ export function EngineModal({
           </div>
         </div>
 
-        <div className="px-5 py-3.5 border-t border-zinc-800 flex items-center justify-end gap-2">
+        <div className="px-6 py-4 border-t border-white/15 flex items-center justify-end gap-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-zinc-200"
+            className="flow-btn-glass px-4 py-2 text-[13px] font-medium cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => void handleSave()}
-            className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300"
+            className="flow-cta-primary px-5 py-2 text-[13px] cursor-pointer"
           >
             Save Engine Settings
           </button>
