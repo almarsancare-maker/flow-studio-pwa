@@ -56,6 +56,9 @@ def main():
         page.get_by_text("Engine 4: Official ByteDance Seedance").first.wait_for(timeout=5_000)
         page.get_by_test_id("omni-resolution-select").wait_for(timeout=5_000)
         page.get_by_test_id("omni-apikey-input").wait_for(timeout=5_000)
+        omni_card = page.get_by_test_id("select-engine-omni")
+        omni_card.click()
+        assert "border-sky-400" in (omni_card.get_attribute("class") or ""), "Omni card did not stay selected"
         nb_href = page.get_by_role("link", name="Download Colab Notebook").get_attribute("href")
         assert nb_href == "/FlowStudio_Colab_T4_Backend.ipynb", f"Bad notebook href: {nb_href}"
         page.get_by_role("button", name="Cancel").click()

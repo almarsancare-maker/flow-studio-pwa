@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Cpu,
@@ -62,19 +62,30 @@ export function EngineModal({
   onSaveSettings,
   onHealthUpdate,
 }: EngineModalProps) {
-  const [draft, setDraft] = useState<EngineSettings>(settings);
+  const [draft, setDraftState] = useState<EngineSettings>(settings);
+  const dirtyRef = useRef(false);
+  const wasOpenRef = useRef(false);
   const [testingColab, setTestingColab] = useState(false);
   const [testingOmni, setTestingOmni] = useState(false);
   const [omniStatus, setOmniStatus] = useState<SeedanceKeyStatus | null>(null);
   const [testingSeedance, setTestingSeedance] = useState(false);
   const [seedanceStatus, setSeedanceStatus] = useState<SeedanceKeyStatus | null>(null);
 
+  const setDraft: typeof setDraftState = (next) => {
+    dirtyRef.current = true;
+    setDraftState(next);
+  };
+
   useEffect(() => {
-    if (open) {
-      setDraft(settings);
+    if (open && !wasOpenRef.current) {
+      dirtyRef.current = false;
+      setDraftState(settings);
       setOmniStatus(null);
       setSeedanceStatus(null);
+    } else if (open && !dirtyRef.current) {
+      setDraftState(settings);
     }
+    wasOpenRef.current = open;
   }, [open, settings]);
 
   useEffect(() => {
