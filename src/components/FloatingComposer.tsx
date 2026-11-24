@@ -175,6 +175,7 @@ export function FloatingComposer({
     }
   };
 
+  const isOmniVideo = mode !== 't2i' && engineSettings.activeEngine === 'gemini-omni';
   const isSeedanceVideo = mode !== 't2i' && engineSettings.activeEngine === 'seedance-byok';
 
   return (
@@ -510,8 +511,10 @@ export function FloatingComposer({
                   <option value={4}>4s</option>
                   <option value={5}>5s</option>
                   <option value={6}>6s</option>
-                  <option value={8}>8s (Seedance)</option>
-                  <option value={10}>10s (Seedance)</option>
+                  <option value={8}>8s</option>
+                  <option value={10}>10s</option>
+                  <option value={12}>12s (Omni 1.2)</option>
+                  <option value={15}>15s (Omni 1.2)</option>
                 </select>
               )}
 
@@ -562,10 +565,18 @@ export function FloatingComposer({
                 {seedLocked && <Lock className="w-2.5 h-2.5 text-amber-400" />}
               </button>
 
-              {/* Seedance Native Audio Status Badge */}
-              {isSeedanceVideo && engineSettings.seedanceAudio && (
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-200">
-                  <Volume2 className="w-3 h-3 text-violet-400" />
+              {/* Native Audio Status Badge (Omni 1.2 & Seedance 2.5) */}
+              {(isOmniVideo || (isSeedanceVideo && engineSettings.seedanceAudio)) && (
+                <span
+                  className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border ${
+                    isOmniVideo
+                      ? 'bg-sky-500/15 border-sky-500/30 text-sky-200'
+                      : 'bg-violet-500/15 border-violet-500/30 text-violet-200'
+                  }`}
+                >
+                  <Volume2
+                    className={`w-3 h-3 ${isOmniVideo ? 'text-sky-400' : 'text-violet-400'}`}
+                  />
                   Audio ON
                 </span>
               )}
@@ -583,7 +594,9 @@ export function FloatingComposer({
                 disabled={!prompt.trim()}
                 onClick={handleQueue}
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold disabled:opacity-40 shadow-lg transition cursor-pointer ${
-                  isSeedanceVideo
+                  isOmniVideo
+                    ? 'bg-gradient-to-r from-sky-400 to-cyan-300 text-zinc-950 hover:from-sky-300 hover:to-cyan-200 shadow-sky-500/25'
+                    : isSeedanceVideo
                     ? 'bg-gradient-to-r from-violet-400 to-fuchsia-400 text-zinc-950 hover:from-violet-300 hover:to-fuchsia-300 shadow-violet-500/25'
                     : 'bg-gradient-to-r from-amber-400 to-orange-400 text-zinc-950 hover:from-amber-300 hover:to-orange-300 shadow-amber-500/20'
                 }`}
@@ -591,6 +604,8 @@ export function FloatingComposer({
                 <span>
                   {mode === 't2i'
                     ? 'Generate Still ($0)'
+                    : isOmniVideo
+                    ? 'Generate Omni 1.2'
                     : isSeedanceVideo
                     ? 'Generate Seedance'
                     : 'Generate Video'}

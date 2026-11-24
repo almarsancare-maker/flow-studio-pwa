@@ -123,6 +123,7 @@ export default function App() {
   const [engineSettings, setEngineSettings] = useState<EngineSettings>(DEFAULT_ENGINE_SETTINGS);
   const [colabHealth, setColabHealth] = useState<ColabHealthStatus | null>(null);
   const [serverKeys, setServerKeys] = useState<ServerKeyCapabilities>({
+    gemini: false,
     replicate: false,
     fal: false,
   });
@@ -339,6 +340,7 @@ export default function App() {
           model: result.providerLabel,
           seed: result.seed,
           thumbnailDataUrl: thumb,
+          omniInteractionId: result.omniInteractionId ?? current.omniInteractionId,
           completedAt: Date.now(),
         };
         await updateShotState(doneShot);
@@ -432,7 +434,11 @@ export default function App() {
       seed: payload.seed,
       engine: engineSettings.activeEngine,
       model:
-        engineSettings.activeEngine === 'seedance-byok'
+        engineSettings.activeEngine === 'gemini-omni'
+          ? kind === 'image'
+            ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
+            : `Gemini Omni 1.2 (${engineSettings.omniResolution})`
+          : engineSettings.activeEngine === 'seedance-byok'
           ? kind === 'image'
             ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
             : `Seedance (${engineSettings.seedanceResolution})`
@@ -445,6 +451,10 @@ export default function App() {
           : 'Free 24/7 Video',
       startFrameDataUrl: payload.startFrameDataUrl,
       endFrameDataUrl: payload.endFrameDataUrl,
+      referenceImages: bible
+        .filter((b) => compiled.appliedTags.includes(b.tag) && b.refImageDataUrl)
+        .map((b) => b.refImageDataUrl as string)
+        .slice(0, 4),
       storyboardOrder: null,
       createdAt: Date.now(),
     };
@@ -619,6 +629,46 @@ export default function App() {
       });
     }
     showToast(`Re-queued ${failed.length} failed ${failed.length === 1 ? 'shot' : 'shots'}`);
+  };
+
+  const handleOmniTurn = async (
+    sourceShot: MediaShot,
+    turnPrompt: string,
+    turnAction: 'edit' | 'extend'
+  ) => {
+    if (!activeProjectId || !sourceShot.omniInteractionId) return;
+    const compiled = compilePromptWithBible(turnPrompt, bible);
+    const turnShot: MediaShot = {
+      id: makeId('omni'),
+      projectId: activeProjectId,
+      label: nextShotLabel(),
+      kind: 'video',
+      mode: 't2v',
+      status: 'queued',
+      progress: 5,
+      phase: `Queued Omni ${turnAction}...`,
+      rawPrompt: turnPrompt,
+      compiledPrompt: compiled.compiledPrompt,
+      negativePrompt: sourceShot.negativePrompt,
+      appliedTags: compiled.appliedTags,
+      aspectRatio: sourceShot.aspectRatio,
+      width: sourceShot.width,
+      height: sourceShot.height,
+      durationSec: turnAction === 'extend' ? 10 : Math.min(sourceShot.durationSec, 15),
+      fps: 24,
+      steps: 24,
+      cfgScale: 6.5,
+      seed: sourceShot.seed,
+      engine: 'gemini-omni',
+      model: `Gemini Omni 1.2 (${turnAction === 'extend' ? '+10s Extend' : 'Edit Turn'})`,
+      previousOmniInteractionId: sourceShot.omniInteractionId,
+      omniTurnAction: turnAction,
+      storyboardOrder: null,
+      createdAt: Date.now(),
+    };
+    await saveShot(turnShot);
+    setShots((prev) => [turnShot, ...prev]);
+    showToast(`Queued Omni 1.2 ${turnAction} turn as ${turnShot.label}`);
   };
 
   const handleDeleteShot = async (shot: MediaShot) => {
@@ -817,7 +867,9 @@ export default function App() {
           await saveEngineSettings(next);
           setEngineSettings(next);
           showToast(
-            next.activeEngine === 'seedance-byok'
+            next.activeEngine === 'gemini-omni'
+              ? `Switched to Google Gemini Omni 1.2 Flash (${next.omniResolution})`
+              : next.activeEngine === 'seedance-byok'
               ? 'Switched to Official Seedance 2.5 (BYOK — Keyframes stay $0!)'
               : next.activeEngine === 'colab-t4'
               ? 'Switched to Free Colab T4 16 GB Engine'
@@ -849,6 +901,9 @@ export default function App() {
         onUpdateSubtitle={(shot, subtitle) => {
           void updateShotState({ ...shot, subtitle });
         }}
+        onOmniTurn={(shot, turnPrompt, turnAction) =>
+          void handleOmniTurn(shot, turnPrompt, turnAction)
+        }
         onDownload={(shot) => void handleDownloadShot(shot)}
       />
     </div>

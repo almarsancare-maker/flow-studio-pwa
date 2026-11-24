@@ -18,6 +18,7 @@ export interface SeedanceKeyStatus {
 }
 
 export interface ServerKeyCapabilities {
+  gemini: boolean;
   replicate: boolean;
   fal: boolean;
 }
@@ -28,6 +29,7 @@ export interface GenerationResult {
   providerLabel: string;
   seed: number;
   thumbnailDataUrl?: string;
+  omniInteractionId?: string;
 }
 
 const HF_FLUX_HOST = 'https://black-forest-labs-flux-1-schnell.hf.space';
@@ -526,14 +528,41 @@ async function generateVideoViaDirectHfLtx(
 export async function fetchServerCapabilities(): Promise<ServerKeyCapabilities> {
   try {
     const resp = await fetchWithTimeout('/api/health', {}, 8_000);
-    if (!resp.ok) return { replicate: false, fal: false };
+    if (!resp.ok) return { gemini: false, replicate: false, fal: false };
     const data = await resp.json();
     return {
+      gemini: Boolean(data?.serverKeys?.gemini),
       replicate: Boolean(data?.serverKeys?.replicate),
       fal: Boolean(data?.serverKeys?.fal),
     };
   } catch {
-    return { replicate: false, fal: false };
+    return { gemini: false, replicate: false, fal: false };
+  }
+}
+
+export async function verifyGeminiOmniApiKey(apiKey: string): Promise<SeedanceKeyStatus> {
+  const cleaned = apiKey.trim();
+  try {
+    const resp = await fetchWithTimeout(
+      '/api/omni',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', apiKey: cleaned }),
+      },
+      15_000
+    );
+    const data = await resp.json();
+    if (!resp.ok || !data?.ok) {
+      return { valid: false, error: data?.error || `HTTP ${resp.status}` };
+    }
+    return {
+      valid: true,
+      usingServerKey: Boolean(data.usingServerKey),
+      account: data.model || 'gemini-omni-1.2-flash',
+    };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : 'Verification failed' };
   }
 }
 
@@ -663,7 +692,105 @@ export async function runVideoGeneration(
   settings: EngineSettings,
   onProgress: (pct: number, phase: string) => void
 ): Promise<GenerationResult> {
-  // Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) — with automatic $0 fallback on HTTP 402!
+  // Engine 3: Official Google Gemini Omni 1.2 Flash (3s–15s, 360p–4K, First/Last Frame, R2V, Turn Edit/Extend)
+  if (settings.activeEngine === 'gemini-omni' || shot.previousOmniInteractionId) {
+    const apiKey = settings.geminiApiKey.trim();
+    onProgress(
+      12,
+      shot.previousOmniInteractionId
+        ? `Chaining Gemini Omni 1.2 Flash turn (${shot.omniTurnAction || 'edit'})...`
+        : `Submitting to Gemini Omni 1.2 Flash (${settings.omniResolution})...`
+    );
+
+    const submitResp = await fetchWithTimeout(
+      '/api/omni',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit',
+          apiKey,
+          mode: shot.mode,
+          prompt: shot.compiledPrompt,
+          aspectRatio: shot.aspectRatio,
+          durationSec: shot.durationSec,
+          resolution: settings.omniResolution,
+          startFrameDataUrl: shot.startFrameDataUrl,
+          endFrameDataUrl: shot.endFrameDataUrl,
+          referenceImages: shot.referenceImages,
+          previousInteractionId: shot.previousOmniInteractionId,
+          omniTurnAction: shot.omniTurnAction,
+        }),
+      },
+      45_000
+    );
+    const submitData = await submitResp.json();
+
+    if (submitData?.billingRequired && !shot.previousOmniInteractionId) {
+      onProgress(18, 'Gemini API billing required — auto-falling back to $0 Wan 2.2 14B Cascade...');
+    } else if (!submitResp.ok || !submitData?.ok || !submitData?.interactionId) {
+      throw new Error(
+        submitData?.error || `Gemini Omni 1.2 Flash error (HTTP ${submitResp.status})`
+      );
+    } else {
+      const interactionId = String(submitData.interactionId);
+      let videoUri: string | null = submitData.videoUri || null;
+
+      if (!videoUri) {
+        for (let attempt = 0; attempt < 180; attempt++) {
+          await new Promise((r) => setTimeout(r, 3500));
+          const pollResp = await fetchWithTimeout(
+            '/api/omni',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'poll', apiKey, interactionId }),
+            },
+            20_000
+          );
+          const poll = await pollResp.json();
+          if (poll.status === 'failed') {
+            throw new Error(poll.error || 'Gemini Omni 1.2 Flash generation failed');
+          }
+          onProgress(
+            Math.min(92, Math.max(20, Number(poll.progress) || 22 + attempt * 2)),
+            poll.phase || 'Rendering video + audio on Gemini Omni 1.2 Flash...'
+          );
+          if (poll.status === 'completed' && poll.videoUri) {
+            videoUri = poll.videoUri;
+            break;
+          }
+        }
+      }
+
+      if (!videoUri) {
+        throw new Error('Gemini Omni 1.2 Flash timed out waiting for output video.');
+      }
+
+      onProgress(95, 'Saving Gemini Omni 1.2 Flash MP4 permanently into local Vault...');
+      const dlResp = await fetchWithTimeout(
+        '/api/omni',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'download', apiKey, videoUri }),
+        },
+        55_000
+      );
+      if (!dlResp.ok) throw new Error(`Gemini Omni MP4 download HTTP ${dlResp.status}`);
+      const blob = await dlResp.blob();
+      return {
+        blob,
+        mimeType: blob.type || 'video/mp4',
+        providerLabel: `Gemini Omni 1.2 Flash (${settings.omniResolution} · Audio)`,
+        seed: shot.seed,
+        thumbnailDataUrl: shot.startFrameDataUrl,
+        omniInteractionId: interactionId,
+      };
+    }
+  }
+
+  // Engine 4: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) — with automatic $0 fallback on HTTP 402!
   if (settings.activeEngine === 'seedance-byok') {
     const apiKey = settings.seedanceApiKey.trim();
     const provider = settings.seedanceProvider;

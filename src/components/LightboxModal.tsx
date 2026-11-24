@@ -10,6 +10,7 @@ interface LightboxModalProps {
   onInjectStartFrame: (dataUrl: string, sourceLabel: string) => void;
   onInjectEndFrame: (dataUrl: string, sourceLabel: string) => void;
   onUpdateSubtitle: (shot: MediaShot, subtitle: string) => void;
+  onOmniTurn: (shot: MediaShot, turnPrompt: string, turnAction: 'edit' | 'extend') => void;
   onDownload: (shot: MediaShot) => void;
 }
 
@@ -20,11 +21,13 @@ export function LightboxModal({
   onInjectStartFrame,
   onInjectEndFrame,
   onUpdateSubtitle,
+  onOmniTurn,
   onDownload,
 }: LightboxModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [notice, setNotice] = useState('');
+  const [omniTurnPrompt, setOmniTurnPrompt] = useState('');
 
   useEffect(() => {
     if (!shot) return;
@@ -211,6 +214,52 @@ export function LightboxModal({
                 Negative Prompt
               </div>
               <p className="text-[11px] text-zinc-400 leading-relaxed">{shot.negativePrompt}</p>
+            </div>
+          )}
+
+          {/* Gemini Omni 1.2 Flash Turn-by-Turn Edit & Extend (via previous_interaction_id) */}
+          {shot.omniInteractionId && (
+            <div className="space-y-2 p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30">
+              <div className="text-[11px] font-semibold text-sky-300 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Omni 1.2 Turn-by-Turn Edit / Extend
+              </div>
+              <input
+                type="text"
+                value={omniTurnPrompt}
+                onChange={(e) => setOmniTurnPrompt(e.target.value)}
+                placeholder='e.g. "Make this video anime. Keep everything else the same."'
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500/50 outline-none"
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={!omniTurnPrompt.trim()}
+                  onClick={() => {
+                    onOmniTurn(shot, omniTurnPrompt.trim(), 'edit');
+                    setOmniTurnPrompt('');
+                    onClose();
+                  }}
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-sky-400 text-zinc-950 hover:bg-sky-300 disabled:opacity-40"
+                >
+                  Edit Turn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOmniTurn(
+                      shot,
+                      omniTurnPrompt.trim() || 'Extend this video smoothly as the scene continues.',
+                      'extend'
+                    );
+                    setOmniTurnPrompt('');
+                    onClose();
+                  }}
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-zinc-900 border border-sky-500/40 text-sky-200 hover:bg-zinc-800"
+                >
+                  Extend +10s
+                </button>
+              </div>
             </div>
           )}
 

@@ -65,8 +65,11 @@ export function TopBar({
   };
 
   const isColabActive = engineSettings.activeEngine === 'colab-t4';
+  const isOmniActive = engineSettings.activeEngine === 'gemini-omni';
   const isSeedanceActive = engineSettings.activeEngine === 'seedance-byok';
   const colabConnected = isColabActive && colabHealth?.online;
+  const omniHasKey =
+    isOmniActive && (engineSettings.geminiApiKey.trim().length > 0 || serverKeys.gemini);
   const hasServerSeedance =
     engineSettings.seedanceProvider === 'replicate' ? serverKeys.replicate : serverKeys.fal;
   const seedanceHasKey =
@@ -179,23 +182,27 @@ export function TopBar({
             <span className="hidden lg:inline">Import Script</span>
           </button>
 
-          {/* Fix #6: 3-Engine Compute Switcher */}
+          {/* Fix #6: 4-Engine Compute Switcher */}
           <button
             type="button"
             onClick={onOpenEngine}
             data-testid="open-engine-btn"
-            title="Switch Compute Engine (Free Cloud / Colab T4 / Seedance 2.5)"
+            title="Switch Compute Engine (Free Cloud / Colab T4 / Gemini Omni 1.2 / Seedance 2.5)"
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition whitespace-nowrap shrink-0 ${
-              seedanceHasKey
+              omniHasKey
+                ? 'bg-sky-500/20 border-sky-400/50 text-sky-200'
+                : seedanceHasKey
                 ? 'bg-violet-500/20 border-violet-400/50 text-violet-200'
                 : colabConnected
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
-                : isColabActive || isSeedanceActive
+                : isColabActive || isSeedanceActive || isOmniActive
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
                 : 'bg-zinc-900/90 border-zinc-800 text-zinc-200 hover:border-zinc-600'
             }`}
           >
-            {isSeedanceActive ? (
+            {isOmniActive ? (
+              <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            ) : isSeedanceActive ? (
               <Zap className="w-3.5 h-3.5 text-violet-400 shrink-0" />
             ) : isColabActive ? (
               <Cpu className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -203,7 +210,11 @@ export function TopBar({
               <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             )}
             <span className="hidden sm:inline">
-              {seedanceHasKey
+              {omniHasKey
+                ? `Omni 1.2 (${engineSettings.omniResolution})`
+                : isOmniActive
+                ? 'Omni 1.2 (Key)'
+                : seedanceHasKey
                 ? 'Seedance 2.5'
                 : isSeedanceActive
                 ? 'Seedance (Key)'

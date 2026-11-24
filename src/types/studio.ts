@@ -1,6 +1,7 @@
 export type GenerationMode = 't2i' | 't2v' | 'i2v';
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '21:9';
-export type EngineId = 'free-24-7' | 'colab-t4' | 'seedance-byok';
+export type EngineId = 'free-24-7' | 'colab-t4' | 'gemini-omni' | 'seedance-byok';
+export type OmniResolution = '360p' | '720p' | '1080p' | '4k';
 export type SeedanceProvider = 'replicate' | 'fal';
 export type SeedanceResolution = '480p' | '720p' | '1080p';
 export type CinemaLut = 'natural' | 'teal-orange' | 'warm-35mm' | 'noir-bw' | 'cyberpunk';
@@ -58,8 +59,12 @@ export interface MediaShot {
   thumbnailDataUrl?: string;
   startFrameDataUrl?: string;
   endFrameDataUrl?: string;
+  referenceImages?: string[];
   subtitle?: string;
   externalTaskId?: string;
+  omniInteractionId?: string;
+  previousOmniInteractionId?: string;
+  omniTurnAction?: 'edit' | 'extend';
   storyboardOrder: number | null;
   error?: string;
   createdAt: number;
@@ -73,6 +78,8 @@ export interface EngineSettings {
   colabModelVideo: 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
   freeImageModel: 'flux' | 'turbo';
   freeVideoFallback: 'hf-ltx-space' | 'ken-burns-local';
+  geminiApiKey: string;
+  omniResolution: OmniResolution;
   seedanceProvider: SeedanceProvider;
   seedanceApiKey: string;
   seedanceModel: string;
@@ -112,6 +119,8 @@ export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   colabModelVideo: 'cogvideox-2b',
   freeImageModel: 'flux',
   freeVideoFallback: 'hf-ltx-space',
+  geminiApiKey: '',
+  omniResolution: '720p',
   seedanceProvider: 'replicate',
   seedanceApiKey: '',
   seedanceModel: 'bytedance/seedance-2.5',

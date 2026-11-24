@@ -7,6 +7,11 @@ import seedanceHandler, {
   validateSeedanceModel,
   validateSeedancePollUrl,
 } from '../api/seedance.js';
+import omniHandler, {
+  sanitizeGeminiError,
+  validateGeminiFileUri,
+  validateGeminiInteractionId,
+} from '../api/omni.js';
 import { validateColabBaseUrl, validateColabPath } from '../api/_ssrf.js';
 
 function createMockRes() {
@@ -47,8 +52,8 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   await healthHandler({ method: 'GET' }, res);
   assert.equal(res.result.statusCode, 200);
   assert.equal(res.result.body.ok, true);
-  assert.equal(res.result.body.engines.length, 3);
-  console.log('[PASS] Test 1: /api/health returns all 3 engines + serverKeys');
+  assert.equal(res.result.body.engines.length, 4);
+  console.log('[PASS] Test 1: /api/health returns all 4 engines + serverKeys');
 }
 
 // Test 2: Strict SSRF allowlist validation
@@ -140,6 +145,30 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   await seedanceHandler({ method: 'POST', body: { action: 'download', videoUrl: 'https://169.254.169.254/latest' } }, resBadDl);
   assert.equal(resBadDl.result.statusCode, 400);
   console.log('[PASS] Test 5: /api/seedance model, poll, and media download SSRF guards verified');
+}
+
+// Test 6: Gemini Omni 1.2 Flash SSRF, File URI allowlist & key redaction
+{
+  assert.equal(validateGeminiInteractionId('v1_abcDEF12345_xyz').ok, true);
+  assert.equal(validateGeminiInteractionId('../../etc/passwd').ok, false);
+  assert.equal(
+    validateGeminiFileUri('https://generativelanguage.googleapis.com/v1beta/files/abc123XYZ:download?alt=media').ok,
+    true
+  );
+  assert.equal(validateGeminiFileUri('https://169.254.169.254/v1beta/files/abc123').ok, false);
+  assert.equal(validateGeminiFileUri('https://evil.com/files/abc123').ok, false);
+
+  const redacted = sanitizeGeminiError(
+    'Failed with key AIzaSyD123456789012345678901234567890 at ?key=secret123',
+    'AIzaSyD123456789012345678901234567890'
+  );
+  assert.ok(!redacted.includes('AIzaSyD'), 'Key was not redacted');
+  assert.ok(!redacted.includes('secret123'), 'Query key was not redacted');
+
+  const resNoKey = createMockRes();
+  await omniHandler({ method: 'POST', headers: {}, body: { action: 'verify', apiKey: '' } }, resNoKey);
+  assert.equal(resNoKey.result.statusCode, 400);
+  console.log('[PASS] Test 6: /api/omni interaction ID, File URI SSRF allowlist & key redaction verified');
 }
 
 console.log('ALL_PHASE2_API_TESTS_PASSED');

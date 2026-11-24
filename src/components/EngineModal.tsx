@@ -12,9 +12,15 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import type { EngineSettings, SeedanceProvider, SeedanceResolution } from '../types/studio';
+import type {
+  EngineSettings,
+  OmniResolution,
+  SeedanceProvider,
+  SeedanceResolution,
+} from '../types/studio';
 import {
   pingColabBackend,
+  verifyGeminiOmniApiKey,
   verifySeedanceApiKey,
   type ColabHealthStatus,
   type SeedanceKeyStatus,
@@ -58,12 +64,15 @@ export function EngineModal({
 }: EngineModalProps) {
   const [draft, setDraft] = useState<EngineSettings>(settings);
   const [testingColab, setTestingColab] = useState(false);
+  const [testingOmni, setTestingOmni] = useState(false);
+  const [omniStatus, setOmniStatus] = useState<SeedanceKeyStatus | null>(null);
   const [testingSeedance, setTestingSeedance] = useState(false);
   const [seedanceStatus, setSeedanceStatus] = useState<SeedanceKeyStatus | null>(null);
 
   useEffect(() => {
     if (open) {
       setDraft(settings);
+      setOmniStatus(null);
       setSeedanceStatus(null);
     }
   }, [open, settings]);
@@ -89,6 +98,19 @@ export function EngineModal({
       }
     } finally {
       setTestingColab(false);
+    }
+  };
+
+  const handleTestOmni = async () => {
+    setTestingOmni(true);
+    try {
+      const result = await verifyGeminiOmniApiKey(draft.geminiApiKey);
+      setOmniStatus(result);
+      if (result.valid) {
+        setDraft((prev) => ({ ...prev, activeEngine: 'gemini-omni' }));
+      }
+    } finally {
+      setTestingOmni(false);
     }
   };
 
@@ -133,10 +155,10 @@ export function EngineModal({
           <div>
             <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
               <Cpu className="w-4 h-4 text-emerald-400" />
-              3-Engine Studio Compute (2 Free Forever + Optional Seedance 2.5 BYOK)
+              4-Engine Cinema Compute (2 Free Forever + Gemini Omni 1.2 Flash + Seedance 2.5)
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Draft unlimited keyframes at $0, then render video on Free Cloud, Free Colab T4 16 GB, or Official ByteDance Seedance 2.5 (pay-per-clip, zero subscription).
+              Draft unlimited keyframes at $0, render free videos on Wan 2.2 14B / Colab T4, or switch to official Google Gemini Omni 1.2 Flash (3s–15s, 4K, Turn Edit/Extend) or Seedance 2.5.
             </p>
           </div>
           <button
@@ -149,29 +171,29 @@ export function EngineModal({
         </div>
 
         <div className="p-5 overflow-y-auto space-y-4">
-          {/* 3 Engine Mode Cards */}
-          <div className="grid sm:grid-cols-3 gap-2.5">
+          {/* 4 Engine Mode Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               type="button"
               data-testid="select-engine-free"
               onClick={() => setDraft({ ...draft, activeEngine: 'free-24-7' })}
-              className={`text-left p-3 rounded-xl border transition ${
+              className={`text-left p-2.5 rounded-xl border transition ${
                 draft.activeEngine === 'free-24-7'
                   ? 'border-amber-400/60 bg-amber-500/10'
                   : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
               }`}
             >
               <div className="flex items-center justify-between gap-1">
-                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  Free 24/7 Cloud
+                  Free 24/7
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 shrink-0">
                   $0
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                FLUX.1-schnell stills + Multi-Space Wan 2.2 14B (First→Last Frame &amp; FP8) + LTX-Video cascade.
+              <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+                FLUX + Wan 2.2 14B First→Last &amp; FP8 + LTX cascade.
               </p>
             </button>
 
@@ -179,23 +201,47 @@ export function EngineModal({
               type="button"
               data-testid="select-engine-colab"
               onClick={() => setDraft({ ...draft, activeEngine: 'colab-t4' })}
-              className={`text-left p-3 rounded-xl border transition ${
+              className={`text-left p-2.5 rounded-xl border transition ${
                 draft.activeEngine === 'colab-t4'
                   ? 'border-emerald-400/60 bg-emerald-500/10'
                   : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
               }`}
             >
               <div className="flex items-center justify-between gap-1">
-                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1">
                   <Cpu className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  Colab T4 16 GB
+                  Colab T4
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 shrink-0">
                   $0 GPU
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                Free Google Colab T4 running SDXL, CogVideoX-2B, LTX-Video (T2V/I2V), or Wan2.1.
+              <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+                Free 16 GB T4: SDXL, CogVideoX-2B, LTX, Wan2.1.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              data-testid="select-engine-omni"
+              onClick={() => setDraft({ ...draft, activeEngine: 'gemini-omni' })}
+              className={`text-left p-2.5 rounded-xl border transition ${
+                draft.activeEngine === 'gemini-omni'
+                  ? 'border-sky-400/70 bg-sky-500/15'
+                  : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  Omni 1.2
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-200 shrink-0">
+                  4K·15s
+                </span>
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+                Google Gemini Omni 1.2 Flash + Turn Edit/Extend 30s.
               </p>
             </button>
 
@@ -203,14 +249,14 @@ export function EngineModal({
               type="button"
               data-testid="select-engine-seedance"
               onClick={() => setDraft({ ...draft, activeEngine: 'seedance-byok' })}
-              className={`text-left p-3 rounded-xl border transition ${
+              className={`text-left p-2.5 rounded-xl border transition ${
                 draft.activeEngine === 'seedance-byok'
                   ? 'border-violet-400/70 bg-violet-500/15'
                   : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
               }`}
             >
               <div className="flex items-center justify-between gap-1">
-                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-zinc-100 flex items-center gap-1">
                   <Zap className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                   Seedance 2.5
                 </span>
@@ -218,18 +264,122 @@ export function EngineModal({
                   BYOK
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                Official ByteDance Seedance 2.5 / 2.0 + Native Audio via your own Replicate or fal.ai key.
+              <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+                ByteDance Seedance 2.5 / 2.0 + Audio via Replicate/fal.
               </p>
             </button>
           </div>
 
-          {/* Engine 3 Config: Official ByteDance Seedance (BYOK) */}
+          {/* Engine 3 Config: Official Google Gemini Omni 1.2 Flash */}
+          <div className="rounded-xl border border-sky-500/30 bg-sky-950/15 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-sky-200 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                Engine 3: Official Google Gemini Omni 1.2 Flash (3s–15s · 360p–4K · Turn Edit/Extend)
+              </div>
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-sky-200 bg-sky-500/15 border border-sky-500/30 hover:bg-sky-500/25"
+              >
+                Get Google AI Studio Key
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            <div className="text-[11px] text-zinc-400 leading-relaxed">
+              Supports <strong className="text-zinc-200">First→Last Frame</strong> (3s–10s),{' '}
+              <strong className="text-zinc-200">Bible Multi-Reference R2V</strong>, native audio, and{' '}
+              <strong className="text-sky-300">Turn-by-Turn Editing &amp; +10s Extensions (up to 30s)</strong>.{' '}
+              <em>Note: Google&apos;s API requires billing on your AI Studio key (~$0.023/s at 360p, ~$0.07/s at 720p); if unbilled, Cabardo Studio auto-falls back to $0 Wan 2.2 14B.</em>
+            </div>
+
+            {serverKeys.gemini && (
+              <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border bg-emerald-500/10 border-emerald-500/30 text-emerald-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Encrypted Vercel Server Key active for Google Gemini API.</span>
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-3 gap-2.5 items-end">
+              <div>
+                <label className="block text-[11px] text-zinc-400 mb-1">Omni 1.2 Resolution</label>
+                <select
+                  data-testid="omni-resolution-select"
+                  value={draft.omniResolution}
+                  onChange={(e) =>
+                    setDraft({ ...draft, omniResolution: e.target.value as OmniResolution })
+                  }
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
+                >
+                  <option value="360p">360p Fast Preview (~$0.023/s)</option>
+                  <option value="720p">720p HD Default (~$0.07/s)</option>
+                  <option value="1080p">1080p Full HD (~$0.104/s)</option>
+                  <option value="4k">4K Ultra HD (~$0.209/s)</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    data-testid="omni-apikey-input"
+                    autoComplete="off"
+                    value={draft.geminiApiKey}
+                    onChange={(e) => setDraft({ ...draft, geminiApiKey: e.target.value })}
+                    placeholder={
+                      serverKeys.gemini
+                        ? 'Using encrypted server key (paste another key to override)'
+                        : 'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                    }
+                    className="w-full pl-8 pr-3 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-zinc-800 text-sky-200 placeholder:text-zinc-600 focus:border-sky-500/60 outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  data-testid="omni-verify-btn"
+                  disabled={testingOmni || (!draft.geminiApiKey.trim() && !serverKeys.gemini)}
+                  onClick={() => void handleTestOmni()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sky-500/20 border border-sky-500/40 text-sky-200 hover:bg-sky-500/30 disabled:opacity-40 shrink-0"
+                >
+                  {testingOmni ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  Verify Key
+                </button>
+              </div>
+            </div>
+
+            {omniStatus && (
+              <div
+                className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+                  omniStatus.valid
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                }`}
+              >
+                {omniStatus.valid ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      Verified: <strong>{omniStatus.account}</strong> — Gemini Omni 1.2 Flash active!
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{omniStatus.error}</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Engine 4 Config: Official ByteDance Seedance (BYOK) */}
           <div className="rounded-xl border border-violet-500/30 bg-violet-950/15 p-3.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs font-semibold text-violet-200 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-violet-400" />
-                Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 BYOK)
+                Engine 4: Official ByteDance Seedance (Latest 2.5 / 2.0 BYOK)
               </div>
               <div className="flex items-center gap-1.5">
                 <a
