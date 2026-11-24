@@ -15,12 +15,14 @@ export async function grabVideoFrame(
   const wasPaused = video.paused;
   if (!wasPaused) video.pause();
 
-  const duration = Number.isFinite(video.duration) ? video.duration : 0;
+  const rawDuration = video.duration;
+  const hasFiniteDuration = Number.isFinite(rawDuration) && rawDuration > 0;
   let targetTime = originalTime;
   if (position === 'first') {
     targetTime = 0.05;
   } else if (position === 'last') {
-    targetTime = Math.max(0, duration - 0.08);
+    // Handle Chrome MediaRecorder WebM blobs whose duration reports as Infinity
+    targetTime = hasFiniteDuration ? Math.max(0, rawDuration - 0.08) : 1e7;
   }
 
   if (Math.abs(video.currentTime - targetTime) > 0.02) {

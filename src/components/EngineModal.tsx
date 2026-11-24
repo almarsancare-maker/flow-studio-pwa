@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   Cpu,
@@ -32,6 +32,13 @@ export function EngineModal({
   const [draft, setDraft] = useState<EngineSettings>(settings);
   const [testing, setTesting] = useState(false);
 
+  // Keep draft synchronized whenever modal opens or saved IndexedDB settings hydrate
+  useEffect(() => {
+    if (open) {
+      setDraft(settings);
+    }
+  }, [open, settings]);
+
   if (!open) return null;
 
   const handleTestColab = async () => {
@@ -39,6 +46,9 @@ export function EngineModal({
     try {
       const result = await pingColabBackend(draft.colabUrl);
       onHealthUpdate(result);
+      if (result.online) {
+        setDraft((prev) => ({ ...prev, activeEngine: 'colab-t4' }));
+      }
     } finally {
       setTesting(false);
     }
@@ -191,9 +201,9 @@ export function EngineModal({
             </div>
 
             <ol className="text-[11px] text-zinc-400 space-y-1 list-decimal list-inside">
-              <li>Download the notebook above and upload it to Google Colab (Runtime → T4 GPU).</li>
-              <li>Run <strong className="text-zinc-200">Step 1</strong>, <strong className="text-zinc-200">Step 2</strong>, and <strong className="text-zinc-200">Step 5</strong> (FastAPI + free Cloudflare Tunnel).</li>
-              <li>Paste the printed <code className="text-emerald-300">https://*.trycloudflare.com</code> URL below and click Test.</li>
+              <li>Click <strong className="text-emerald-300">1-Click Open in Colab</strong> above (or download the `.ipynb`) and confirm Runtime → T4 GPU.</li>
+              <li>Click <strong className="text-zinc-200">Runtime → Run all</strong> (~45s — runs Step 1 GPU/install + Step 2 FastAPI &amp; Cloudflare Tunnel).</li>
+              <li>Paste the printed <code className="text-emerald-300">https://*.trycloudflare.com</code> URL below and click Test Connection.</li>
             </ol>
 
             <div className="flex items-center gap-2">

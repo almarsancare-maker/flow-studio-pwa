@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp,
   Clapperboard,
@@ -28,6 +28,15 @@ export interface ComposerSubmitPayload {
   startFrameDataUrl?: string;
 }
 
+export interface RemixRecipePayload {
+  nonce: number;
+  negativePrompt: string;
+  seed: number;
+  steps: number;
+  cfgScale: number;
+  durationSec: number;
+}
+
 interface FloatingComposerProps {
   prompt: string;
   onPromptChange: (val: string) => void;
@@ -37,6 +46,7 @@ interface FloatingComposerProps {
   onAspectRatioChange: (ar: AspectRatio) => void;
   startFrameDataUrl?: string;
   onStartFrameChange: (dataUrl?: string) => void;
+  remixRecipe?: RemixRecipePayload | null;
   bibleEntries: BibleEntry[];
   queueCount: number;
   onSubmit: (payload: ComposerSubmitPayload) => void;
@@ -51,6 +61,7 @@ export function FloatingComposer({
   onAspectRatioChange,
   startFrameDataUrl,
   onStartFrameChange,
+  remixRecipe,
   bibleEntries,
   queueCount,
   onSubmit,
@@ -65,6 +76,16 @@ export function FloatingComposer({
   const [cfgScale, setCfgScale] = useState(6.5);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showExpandedPreview, setShowExpandedPreview] = useState(false);
+
+  useEffect(() => {
+    if (!remixRecipe) return;
+    setNegativePrompt(remixRecipe.negativePrompt);
+    setSeedValue(remixRecipe.seed);
+    setSeedLocked(true);
+    setSteps(remixRecipe.steps);
+    setCfgScale(remixRecipe.cfgScale);
+    setDurationSec(remixRecipe.durationSec);
+  }, [remixRecipe]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 

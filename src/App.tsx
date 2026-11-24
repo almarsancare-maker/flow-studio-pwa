@@ -30,6 +30,7 @@ import {
 import { compilePromptWithBible } from './utils/promptCompiler';
 import { blobToDataUrl, grabVideoFrame } from './utils/frameGrabber';
 import {
+  pingColabBackend,
   runImageGeneration,
   runVideoGeneration,
   type ColabHealthStatus,
@@ -39,6 +40,7 @@ import { BibleDrawer } from './components/BibleDrawer';
 import {
   FloatingComposer,
   type ComposerSubmitPayload,
+  type RemixRecipePayload,
 } from './components/FloatingComposer';
 import { MediaGrid } from './components/MediaGrid';
 import { LightboxModal } from './components/LightboxModal';
@@ -124,6 +126,7 @@ export default function App() {
   const [mode, setMode] = useState<GenerationMode>('t2i');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [startFrameDataUrl, setStartFrameDataUrl] = useState<string | undefined>(undefined);
+  const [remixRecipe, setRemixRecipe] = useState<RemixRecipePayload | null>(null);
 
   // Drawers / Modals / Toast
   const [bibleOpen, setBibleOpen] = useState(false);
@@ -168,6 +171,11 @@ export default function App() {
       const savedId = window.localStorage.getItem('flowstudio_active_project');
       const matched = loadedProjects.find((p) => p.id === savedId);
       setActiveProjectId(matched ? matched.id : loadedProjects[0].id);
+      if (loadedSettings.activeEngine === 'colab-t4' && loadedSettings.colabUrl.trim()) {
+        void pingColabBackend(loadedSettings.colabUrl).then((health) => {
+          if (active) setColabHealth(health);
+        });
+      }
       await refreshVaultUsage();
     });
     return () => {
@@ -182,13 +190,29 @@ export default function App() {
     }
   }, [activeProjectId]);
 
-  // Load project Bible + Shots whenever activeProjectId changes
+  // Load project Bible + Shots whenever activeProjectId changes, recovering any interrupted renders
   useEffect(() => {
     if (!activeProjectId) return;
     void Promise.all([listProjectBible(activeProjectId), listProjectShots(activeProjectId)]).then(
-      ([bList, sList]) => {
+      async ([bList, sList]) => {
         setBible(bList);
-        setShots(sList);
+        const recovered: MediaShot[] = [];
+        for (const shot of sList) {
+          if (shot.status === 'processing' && !processingRef.current) {
+            const fixed: MediaShot = {
+              ...shot,
+              status: 'failed',
+              progress: 0,
+              phase: 'Interrupted',
+              error: 'Render interrupted by page reload — click Retry.',
+            };
+            await saveShot(fixed);
+            recovered.push(fixed);
+          } else {
+            recovered.push(shot);
+          }
+        }
+        setShots(recovered);
       }
     );
   }, [activeProjectId]);
@@ -509,12 +533,21 @@ export default function App() {
     }
   };
 
-  const handleDownloadShot = (shot: MediaShot) => {
+  const handleDownloadShot = async (shot: MediaShot) => {
     const url = (shot.blobKey && blobUrls[shot.blobKey]) || shot.thumbnailDataUrl;
     if (!url) return;
+    let ext = shot.kind === 'video' ? 'mp4' : 'png';
+    if (shot.blobKey) {
+      const blob = await loadBlob(shot.blobKey);
+      const mime = (blob?.type || '').toLowerCase();
+      if (mime.includes('webm')) ext = 'webm';
+      else if (mime.includes('mp4')) ext = 'mp4';
+      else if (mime.includes('webp')) ext = 'webp';
+      else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+      else if (mime.includes('png')) ext = 'png';
+    }
     const a = document.createElement('a');
     a.href = url;
-    const ext = shot.kind === 'video' ? 'webm' : 'png';
     a.download = `${shot.label.toLowerCase()}_seed${shot.seed}.${ext}`;
     a.click();
   };
@@ -591,7 +624,15 @@ export default function App() {
             setPrompt(shot.rawPrompt);
             setMode(shot.mode);
             setAspectRatio(shot.aspectRatio);
-            showToast(`Loaded ${shot.label} recipe into composer`);
+            setRemixRecipe({
+              nonce: Date.now(),
+              negativePrompt: shot.negativePrompt,
+              seed: shot.seed,
+              steps: shot.steps,
+              cfgScale: shot.cfgScale,
+              durationSec: shot.durationSec,
+            });
+            showToast(`Loaded ${shot.label} full recipe (seed ${shot.seed} locked) into composer`);
           }}
           onRetryShot={(shot) =>
             void updateShotState({
@@ -602,7 +643,7 @@ export default function App() {
               error: undefined,
             })
           }
-          onDownloadShot={handleDownloadShot}
+          onDownloadShot={(shot) => void handleDownloadShot(shot)}
           onDeleteShot={(shot) => void handleDeleteShot(shot)}
           onQuickPrompt={(sample) => setPrompt(sample)}
         />
@@ -631,6 +672,7 @@ export default function App() {
         onAspectRatioChange={setAspectRatio}
         startFrameDataUrl={startFrameDataUrl}
         onStartFrameChange={setStartFrameDataUrl}
+        remixRecipe={remixRecipe}
         bibleEntries={bible}
         queueCount={activeQueueCount}
         onSubmit={(payload) => void handleQueueSingleShot(payload)}
@@ -694,7 +736,7 @@ export default function App() {
           setMode('i2v');
           showToast(`Locked ${sourceLabel} → Start Frame ready for next scene!`);
         }}
-        onDownload={handleDownloadShot}
+        onDownload={(shot) => void handleDownloadShot(shot)}
       />
     </div>
   );
