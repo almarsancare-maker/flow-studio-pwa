@@ -79,12 +79,46 @@ async function fetchWithTimeout(
   }
 }
 
+function hfAuthHeaders(
+  hfToken?: string,
+  extra: Record<string, string> = {}
+): Record<string, string> {
+  const clean = (hfToken || '').trim();
+  return clean ? { ...extra, Authorization: `Bearer ${clean}` } : extra;
+}
+
+export async function verifyHfToken(hfToken: string): Promise<SeedanceKeyStatus> {
+  const cleaned = hfToken.trim();
+  if (!cleaned) {
+    return { valid: false, error: 'Paste a free Hugging Face token (hf_...) first.' };
+  }
+  try {
+    const resp = await fetchWithTimeout(
+      'https://huggingface.co/api/whoami-v2',
+      { headers: { Authorization: `Bearer ${cleaned}` } },
+      12_000
+    );
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data?.name) {
+      return { valid: false, error: data?.error || `Hugging Face rejected token (HTTP ${resp.status})` };
+    }
+    return { valid: true, account: `@${data.name}` };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : 'HF token verification failed' };
+  }
+}
+
 async function readGradioSseComplete(
   sseUrl: string,
   timeoutMs: number,
-  onHeartbeat?: () => void
+  onHeartbeat?: () => void,
+  hfToken?: string
 ): Promise<unknown> {
-  const resp = await fetchWithTimeout(sseUrl, { method: 'GET' }, timeoutMs);
+  const resp = await fetchWithTimeout(
+    sseUrl,
+    { method: 'GET', headers: hfAuthHeaders(hfToken) },
+    timeoutMs
+  );
   if (!resp.ok) {
     throw new Error(`Gradio stream HTTP ${resp.status}`);
   }
@@ -112,7 +146,8 @@ async function readGradioSseComplete(
       } else if (line.startsWith('data:')) {
         const raw = line.slice(5).trim();
         if (eventName === 'error') {
-          throw new Error(`ZeroGPU space error: ${raw || 'quota/busy'}`);
+          const detail = raw && raw !== 'null' ? raw : 'ZeroGPU quota exhausted (authenticate with free HF token or use Free Colab T4)';
+          throw new Error(detail);
         }
         if (eventName === 'complete') {
           return JSON.parse(raw);
@@ -126,7 +161,8 @@ async function readGradioSseComplete(
 async function uploadBlobToGradio(
   host: string,
   blob: Blob,
-  filename: string
+  filename: string,
+  hfToken?: string
 ): Promise<{
   path: string;
   url: string;
@@ -141,7 +177,7 @@ async function uploadBlobToGradio(
 
   const upResp = await fetchWithTimeout(
     `${host}/gradio_api/upload`,
-    { method: 'POST', body: form },
+    { method: 'POST', headers: hfAuthHeaders(hfToken), body: form },
     25_000
   );
   if (!upResp.ok) throw new Error(`Gradio upload HTTP ${upResp.status}`);
@@ -160,7 +196,8 @@ async function uploadBlobToGradio(
 async function uploadDataUrlToGradio(
   host: string,
   dataUrl: string,
-  prefix = 'frame'
+  prefix = 'frame',
+  hfToken?: string
 ): Promise<{
   path: string;
   url: string;
@@ -171,7 +208,7 @@ async function uploadDataUrlToGradio(
 }> {
   const { blob, mimeType } = dataUrlToBlob(dataUrl);
   const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
-  return uploadBlobToGradio(host, blob, `${prefix}.${ext}`);
+  return uploadBlobToGradio(host, blob, `${prefix}.${ext}`, hfToken);
 }
 
 function extractGradioVideoUrl(parsed: unknown, host: string): string | null {
@@ -191,7 +228,8 @@ async function generateImageViaDirectHfFlux(
   prompt: string,
   width: number,
   height: number,
-  seed: number
+  seed: number,
+  hfToken?: string
 ): Promise<{ blob: Blob; mimeType: string; dataUrl: string; provider: string; seed: number }> {
   const safeW = Math.max(256, Math.min(1280, Math.round(width / 16) * 16));
   const safeH = Math.max(256, Math.min(1280, Math.round(height / 16) * 16));
@@ -199,7 +237,7 @@ async function generateImageViaDirectHfFlux(
     `${HF_FLUX_HOST}/gradio_api/call/infer`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ data: [prompt, seed, false, safeW, safeH, 4] }),
     },
     10_000
@@ -210,7 +248,9 @@ async function generateImageViaDirectHfFlux(
 
   const parsed = await readGradioSseComplete(
     `${HF_FLUX_HOST}/gradio_api/call/infer/${eventId}`,
-    16_000
+    22_000,
+    undefined,
+    hfToken
   );
   const arr = Array.isArray(parsed) ? parsed : [];
   const imgObj = arr[0] as { url?: string; path?: string } | undefined;
@@ -218,7 +258,7 @@ async function generateImageViaDirectHfFlux(
     imgObj?.url || (imgObj?.path ? `${HF_FLUX_HOST}/gradio_api/file=${imgObj.path}` : null);
   if (!imgUrl) throw new Error('HF FLUX returned no image URL');
 
-  const imgResp = await fetchWithTimeout(imgUrl, {}, 20_000);
+  const imgResp = await fetchWithTimeout(imgUrl, { headers: hfAuthHeaders(hfToken) }, 20_000);
   if (!imgResp.ok) throw new Error(`HF FLUX image download HTTP ${imgResp.status}`);
   const blob = await imgResp.blob();
   if (blob.size < 1024) throw new Error('HF FLUX empty image blob');
@@ -237,7 +277,8 @@ async function generateImageViaDirectHfFluxDev(
   width: number,
   height: number,
   seed: number,
-  steps = 24
+  steps = 24,
+  hfToken?: string
 ): Promise<{ blob: Blob; mimeType: string; dataUrl: string; provider: string; seed: number }> {
   const safeW = Math.max(256, Math.min(1280, Math.round(width / 16) * 16));
   const safeH = Math.max(256, Math.min(1280, Math.round(height / 16) * 16));
@@ -246,7 +287,7 @@ async function generateImageViaDirectHfFluxDev(
     `${HF_FLUX_DEV_HOST}/gradio_api/call/infer`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ data: [prompt, seed, false, safeW, safeH, 3.5, safeSteps] }),
     },
     18_000
@@ -257,7 +298,9 @@ async function generateImageViaDirectHfFluxDev(
 
   const parsed = await readGradioSseComplete(
     `${HF_FLUX_DEV_HOST}/gradio_api/call/infer/${eventId}`,
-    55_000
+    55_000,
+    undefined,
+    hfToken
   );
   const arr = Array.isArray(parsed) ? parsed : [];
   const imgObj = arr[0] as { url?: string; path?: string } | undefined;
@@ -265,7 +308,7 @@ async function generateImageViaDirectHfFluxDev(
     imgObj?.url || (imgObj?.path ? `${HF_FLUX_DEV_HOST}/gradio_api/file=${imgObj.path}` : null);
   if (!imgUrl) throw new Error('HF FLUX.1-dev returned no image URL');
 
-  const imgResp = await fetchWithTimeout(imgUrl, {}, 20_000);
+  const imgResp = await fetchWithTimeout(imgUrl, { headers: hfAuthHeaders(hfToken) }, 20_000);
   if (!imgResp.ok) throw new Error(`HF FLUX.1-dev download HTTP ${imgResp.status}`);
   const blob = await imgResp.blob();
   if (blob.size < 1024) throw new Error('HF FLUX.1-dev empty image blob');
@@ -284,7 +327,8 @@ async function generateImageViaDirectHfSd35(
   negativePrompt: string,
   width: number,
   height: number,
-  seed: number
+  seed: number,
+  hfToken?: string
 ): Promise<{ blob: Blob; mimeType: string; dataUrl: string; provider: string; seed: number }> {
   const safeW = Math.max(512, Math.min(1280, Math.round(width / 16) * 16));
   const safeH = Math.max(512, Math.min(1280, Math.round(height / 16) * 16));
@@ -292,7 +336,7 @@ async function generateImageViaDirectHfSd35(
     `${HF_SD35_HOST}/gradio_api/call/infer`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: [prompt, negativePrompt || WAN_DEFAULT_NEG, seed, false, safeW, safeH, 1.0, 4],
       }),
@@ -305,7 +349,9 @@ async function generateImageViaDirectHfSd35(
 
   const parsed = await readGradioSseComplete(
     `${HF_SD35_HOST}/gradio_api/call/infer/${eventId}`,
-    40_000
+    40_000,
+    undefined,
+    hfToken
   );
   const arr = Array.isArray(parsed) ? parsed : [];
   const imgObj = arr[0] as { url?: string; path?: string } | undefined;
@@ -313,7 +359,7 @@ async function generateImageViaDirectHfSd35(
     imgObj?.url || (imgObj?.path ? `${HF_SD35_HOST}/gradio_api/file=${imgObj.path}` : null);
   if (!imgUrl) throw new Error('HF SD 3.5 returned no image URL');
 
-  const imgResp = await fetchWithTimeout(imgUrl, {}, 20_000);
+  const imgResp = await fetchWithTimeout(imgUrl, { headers: hfAuthHeaders(hfToken) }, 20_000);
   if (!imgResp.ok) throw new Error(`HF SD 3.5 download HTTP ${imgResp.status}`);
   const blob = await imgResp.blob();
   if (blob.size < 1024) throw new Error('HF SD 3.5 empty image blob');
@@ -330,18 +376,18 @@ async function generateImageViaDirectHfSd35(
 /**
  * $0 Synchronized AI Video-to-Audio Foley & Sound Design powered by open-weight
  * MMAudio on Hugging Face ZeroGPU (CORS-enabled direct from browser).
- * Analyzes actual video frames + prompt and returns an MP4 muxed with synced audio.
  */
 export async function synthesizeSyncedVideoAudio(
   videoBlob: Blob,
   prompt: string,
   durationSec = 5,
   seed = -1,
-  onProgress?: (pct: number, phase: string) => void
+  onProgress?: (pct: number, phase: string) => void,
+  hfToken?: string
 ): Promise<{ blob: Blob; mimeType: string }> {
   onProgress?.(92, 'Uploading clip to Free MMAudio ($0 Synced AI Foley)...');
   const ext = (videoBlob.type || '').includes('webm') ? 'webm' : 'mp4';
-  const uploadedVid = await uploadBlobToGradio(HF_MMAUDIO_HOST, videoBlob, `clip.${ext}`);
+  const uploadedVid = await uploadBlobToGradio(HF_MMAUDIO_HOST, videoBlob, `clip.${ext}`, hfToken);
 
   const dur = Math.max(2, Math.min(10, Number(durationSec) || 5));
   onProgress?.(95, 'Synthesizing frame-synced AI Foley & ambience ($0 MMAudio)...');
@@ -349,7 +395,7 @@ export async function synthesizeSyncedVideoAudio(
     `${HF_MMAUDIO_HOST}/gradio_api/call/video_to_audio`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: [
           uploadedVid,
@@ -370,13 +416,15 @@ export async function synthesizeSyncedVideoAudio(
 
   const parsed = await readGradioSseComplete(
     `${HF_MMAUDIO_HOST}/gradio_api/call/video_to_audio/${eventId}`,
-    50_000
+    50_000,
+    undefined,
+    hfToken
   );
   const outUrl = extractGradioVideoUrl(parsed, HF_MMAUDIO_HOST);
   if (!outUrl) throw new Error('MMAudio completed without output video URL');
 
   onProgress?.(98, 'Downloading audio-synced MP4 into IndexedDB Vault...');
-  const resp = await fetchWithTimeout(outUrl, {}, 25_000);
+  const resp = await fetchWithTimeout(outUrl, { headers: hfAuthHeaders(hfToken) }, 25_000);
   if (!resp.ok) throw new Error(`MMAudio download HTTP ${resp.status}`);
   const outBlob = await resp.blob();
   if (outBlob.size < 4096) throw new Error('MMAudio returned empty video blob');
@@ -450,7 +498,8 @@ async function generateFreeImageCascade(
   model: FreeImageModel,
   onProgress: (pct: number, phase: string) => void,
   negativePrompt = '',
-  steps = 24
+  steps = 24,
+  hfToken?: string
 ): Promise<{ dataUrl: string; blob: Blob; mimeType: string; provider: string; seed: number }> {
   const errors: string[] = [];
   const pollFallbackModel: 'flux' | 'turbo' = model === 'turbo' ? 'turbo' : 'flux';
@@ -459,26 +508,26 @@ async function generateFreeImageCascade(
   if (model === 'flux-dev') {
     try {
       onProgress(22, 'Rendering Cinema Pro still via HF FLUX.1-dev ($0 ZeroGPU)...');
-      return await generateImageViaDirectHfFluxDev(prompt, width, height, seed, steps);
+      return await generateImageViaDirectHfFluxDev(prompt, width, height, seed, steps, hfToken);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX.1-dev failed');
     }
     try {
       onProgress(52, 'Switching to HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed);
+      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
     }
   } else if (model === 'sd35-turbo') {
     try {
       onProgress(22, 'Rendering HD still via Stability SD 3.5 Large Turbo ($0 ZeroGPU)...');
-      return await generateImageViaDirectHfSd35(prompt, negativePrompt, width, height, seed);
+      return await generateImageViaDirectHfSd35(prompt, negativePrompt, width, height, seed, hfToken);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF SD 3.5 failed');
     }
     try {
       onProgress(52, 'Switching to HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed);
+      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
     }
@@ -492,14 +541,14 @@ async function generateFreeImageCascade(
     }
     try {
       onProgress(55, 'Switching to HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed);
+      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
     }
   } else {
     try {
       onProgress(25, 'Rendering HD keyframe via HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed);
+      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
     }
@@ -536,12 +585,13 @@ async function generateVideoViaWan22FirstLastFrame(
   shot: MediaShot,
   startFrame: string,
   endFrame: string,
-  onProgress: (pct: number, phase: string) => void
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
 ): Promise<GenerationResult> {
   onProgress(20, 'Uploading Start & End frames to Free Wan 2.2 14B (ZeroGPU)...');
   const [startFile, endFile] = await Promise.all([
-    uploadDataUrlToGradio(HF_WAN22_FLF_HOST, startFrame, 'start'),
-    uploadDataUrlToGradio(HF_WAN22_FLF_HOST, endFrame, 'end'),
+    uploadDataUrlToGradio(HF_WAN22_FLF_HOST, startFrame, 'start', hfToken),
+    uploadDataUrlToGradio(HF_WAN22_FLF_HOST, endFrame, 'end', hfToken),
   ]);
 
   onProgress(35, 'Morphing Start → End Frame on Wan 2.2 14B ($0 ZeroGPU)...');
@@ -550,7 +600,7 @@ async function generateVideoViaWan22FirstLastFrame(
     `${HF_WAN22_FLF_HOST}/gradio_api/call/generate_video`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: [
           startFile,
@@ -575,17 +625,18 @@ async function generateVideoViaWan22FirstLastFrame(
   let tick = 42;
   const parsed = await readGradioSseComplete(
     `${HF_WAN22_FLF_HOST}/gradio_api/call/generate_video/${eventId}`,
-    90_000,
+    95_000,
     () => {
       tick = Math.min(88, tick + 6);
       onProgress(tick, 'Diffusing Wan 2.2 14B First→Last Frame ($0 ZeroGPU)...');
-    }
+    },
+    hfToken
   );
   const videoUrl = extractGradioVideoUrl(parsed, HF_WAN22_FLF_HOST);
   if (!videoUrl) throw new Error('Wan 2.2 FLF returned no video URL');
 
   onProgress(94, 'Caching Wan 2.2 MP4 into IndexedDB Vault...');
-  const vidResp = await fetchWithTimeout(videoUrl, {}, 30_000);
+  const vidResp = await fetchWithTimeout(videoUrl, { headers: hfAuthHeaders(hfToken) }, 30_000);
   if (!vidResp.ok) throw new Error(`Wan 2.2 FLF MP4 HTTP ${vidResp.status}`);
   const blob = await vidResp.blob();
   return {
@@ -600,10 +651,11 @@ async function generateVideoViaWan22FirstLastFrame(
 async function generateVideoViaWan22Fast(
   shot: MediaShot,
   keyframeDataUrl: string,
-  onProgress: (pct: number, phase: string) => void
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
 ): Promise<GenerationResult> {
   onProgress(28, 'Uploading keyframe to Free Wan 2.2 14B FP8 Lightning...');
-  const imgFile = await uploadDataUrlToGradio(HF_WAN22_I2V_HOST, keyframeDataUrl, 'start');
+  const imgFile = await uploadDataUrlToGradio(HF_WAN22_I2V_HOST, keyframeDataUrl, 'start', hfToken);
   const dur = Math.max(2.0, Math.min(5.0, shot.durationSec || 3.5));
 
   onProgress(40, 'Diffusing Wan 2.2 14B FP8 6-step video ($0 ZeroGPU)...');
@@ -611,7 +663,7 @@ async function generateVideoViaWan22Fast(
     `${HF_WAN22_I2V_HOST}/gradio_api/call/generate_video`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: [
           imgFile,
@@ -635,17 +687,18 @@ async function generateVideoViaWan22Fast(
   let tick = 48;
   const parsed = await readGradioSseComplete(
     `${HF_WAN22_I2V_HOST}/gradio_api/call/generate_video/${eventId}`,
-    90_000,
+    95_000,
     () => {
       tick = Math.min(88, tick + 6);
       onProgress(tick, 'Diffusing Wan 2.2 14B cinema frames ($0 ZeroGPU)...');
-    }
+    },
+    hfToken
   );
   const videoUrl = extractGradioVideoUrl(parsed, HF_WAN22_I2V_HOST);
   if (!videoUrl) throw new Error('Wan 2.2 FP8 returned no video URL');
 
   onProgress(94, 'Caching Wan 2.2 14B MP4 into IndexedDB Vault...');
-  const vidResp = await fetchWithTimeout(videoUrl, {}, 30_000);
+  const vidResp = await fetchWithTimeout(videoUrl, { headers: hfAuthHeaders(hfToken) }, 30_000);
   if (!vidResp.ok) throw new Error(`Wan 2.2 FP8 MP4 HTTP ${vidResp.status}`);
   const blob = await vidResp.blob();
   return {
@@ -659,7 +712,8 @@ async function generateVideoViaWan22Fast(
 
 async function generateVideoViaDirectHfLtx(
   shot: MediaShot,
-  onProgress: (pct: number, phase: string) => void
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
 ): Promise<GenerationResult> {
   const isI2V =
     shot.mode === 'i2v' &&
@@ -669,7 +723,7 @@ async function generateVideoViaDirectHfLtx(
   let uploadedImage = null;
   if (isI2V && shot.startFrameDataUrl) {
     onProgress(52, 'Uploading Start Frame to HF LTX-Video ZeroGPU...');
-    uploadedImage = await uploadDataUrlToGradio(HF_LTX_HOST, shot.startFrameDataUrl, 'start');
+    uploadedImage = await uploadDataUrlToGradio(HF_LTX_HOST, shot.startFrameDataUrl, 'start', hfToken);
   }
 
   const endpoint = isI2V ? 'image_to_video' : 'text_to_video';
@@ -682,7 +736,7 @@ async function generateVideoViaDirectHfLtx(
     `${HF_LTX_HOST}/gradio_api/call/${endpoint}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: [
           shot.compiledPrompt,
@@ -710,18 +764,19 @@ async function generateVideoViaDirectHfLtx(
   let tick = 64;
   const parsed = await readGradioSseComplete(
     `${HF_LTX_HOST}/gradio_api/call/${endpoint}/${eventId}`,
-    75_000,
+    85_000,
     () => {
       tick = Math.min(88, tick + 5);
       onProgress(tick, 'Diffusing motion frames on HF LTX-Video ZeroGPU...');
-    }
+    },
+    hfToken
   );
 
   const videoUrl = extractGradioVideoUrl(parsed, HF_LTX_HOST);
   if (!videoUrl) throw new Error('LTX completed without video URL');
 
   onProgress(93, 'Downloading LTX-Video MP4 into local Vault...');
-  const vidResp = await fetchWithTimeout(videoUrl, {}, 30_000);
+  const vidResp = await fetchWithTimeout(videoUrl, { headers: hfAuthHeaders(hfToken) }, 30_000);
   if (!vidResp.ok) throw new Error(`LTX MP4 download HTTP ${vidResp.status}`);
   const blob = await vidResp.blob();
   if (blob.size < 2048) throw new Error('LTX returned empty video');
@@ -888,7 +943,8 @@ export async function runImageGeneration(
     settings.freeImageModel,
     onProgress,
     shot.negativePrompt,
-    shot.steps
+    shot.steps,
+    settings.hfToken
   );
   onProgress(96, 'Caching permanently in IndexedDB Vault...');
   return {
@@ -1122,6 +1178,8 @@ export async function runVideoGeneration(
           model: settings.colabModelVideo,
           mode: shot.mode,
           startFrameDataUrl: shot.startFrameDataUrl,
+          endFrameDataUrl: shot.endFrameDataUrl,
+          generateAudio: settings.colabAudio,
         }),
       },
       25_000
@@ -1163,14 +1221,17 @@ export async function runVideoGeneration(
         return {
           blob,
           mimeType: blob.type || 'video/mp4',
-          providerLabel: `Colab T4 (${settings.colabModelVideo})`,
+          providerLabel: `Colab T4 (${settings.colabModelVideo}${poll.has_audio ? ' + Audio' : ''})`,
           seed: shot.seed,
           thumbnailDataUrl: shot.startFrameDataUrl,
+          hasSyncedAudio: Boolean(poll.has_audio),
         };
       }
     }
     throw new Error('Colab T4 video render timed out after 9 minutes.');
   }
+
+  const hfToken = settings.hfToken?.trim() || undefined;
 
   const attachFreeSyncedAudioIfEnabled = async (
     base: GenerationResult
@@ -1182,7 +1243,8 @@ export async function runVideoGeneration(
         shot.rawPrompt || shot.compiledPrompt,
         shot.durationSec,
         base.seed,
-        onProgress
+        onProgress,
+        hfToken
       );
       return {
         ...base,
@@ -1192,35 +1254,34 @@ export async function runVideoGeneration(
         hasSyncedAudio: true,
       };
     } catch {
-      // Never fail a completed video if MMAudio ZeroGPU queue is busy; user can still click Sync Foley in Lightbox
       return base;
     }
   };
 
-  // Engine 1: Multi-Space $0 AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video -> Director Cinema Motion) + Free MMAudio Synced Foley
+  // Engine 1: Real Open-Weight AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video)
   let keyframeDataUrl = shot.startFrameDataUrl;
   let actualSeed = shot.seed;
+  const videoErrors: string[] = [];
 
   if (settings.freeVideoFallback === 'hf-ltx-space') {
-    // Path A: Both Start Frame & End Frame provided -> Free Wan 2.2 14B First-to-Last Frame Morph!
     if (keyframeDataUrl && shot.endFrameDataUrl) {
       try {
         const res = await generateVideoViaWan22FirstLastFrame(
           shot,
           keyframeDataUrl,
           shot.endFrameDataUrl,
-          onProgress
+          onProgress,
+          hfToken
         );
         return await attachFreeSyncedAudioIfEnabled(res);
-      } catch {
-        // Fall through to Wan 2.2 FP8 single-frame
+      } catch (e) {
+        videoErrors.push(`Wan 2.2 FLF: ${e instanceof Error ? e.message : 'failed'}`);
       }
     }
 
-    // Path B: Ensure crisp $0 HD keyframe exists, then animate via Wan 2.2 14B FP8 Lightning (closest $0 quality to Seedance!)
     if (!keyframeDataUrl) {
       try {
-        onProgress(14, 'Stage 1/2: Generating $0 FLUX keyframe for Wan 2.2 14B...');
+        onProgress(14, 'Stage 1/2: Generating $0 HD keyframe for Wan 2.2 14B...');
         const still = await generateFreeImageCascade(
           shot.compiledPrompt,
           shot.width >= shot.height ? 1024 : 576,
@@ -1229,33 +1290,40 @@ export async function runVideoGeneration(
           settings.freeImageModel,
           onProgress,
           shot.negativePrompt,
-          shot.steps
+          shot.steps,
+          hfToken
         );
         keyframeDataUrl = still.dataUrl;
         actualSeed = still.seed;
-      } catch {
-        // Try pure LTX T2V if keyframe failed
+      } catch (e) {
+        videoErrors.push(`Keyframe: ${e instanceof Error ? e.message : 'failed'}`);
       }
     }
 
     if (keyframeDataUrl) {
       try {
-        const res = await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress);
+        const res = await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress, hfToken);
         return await attachFreeSyncedAudioIfEnabled(res);
-      } catch {
-        // Cascade to HF LTX-Video Distilled
+      } catch (e) {
+        videoErrors.push(`Wan 2.2 FP8: ${e instanceof Error ? e.message : 'failed'}`);
       }
     }
 
     try {
-      const res = await generateVideoViaDirectHfLtx(shot, onProgress);
+      const res = await generateVideoViaDirectHfLtx(shot, onProgress, hfToken);
       return await attachFreeSyncedAudioIfEnabled(res);
-    } catch {
-      // Guaranteed zero-wait fallback below
+    } catch (e) {
+      videoErrors.push(`LTX-Video: ${e instanceof Error ? e.message : 'failed'}`);
     }
+
+    // NEVER silently substitute a fake static-image Ken Burns zoom!
+    const authHint = hfToken
+      ? 'Your Hugging Face ZeroGPU daily quota is currently busy. Click "Setup Free GPU" to connect 1-Click Free Google Colab T4 16 GB for unlimited real LTX-0.9.7 video + audio.'
+      : 'Hugging Face ZeroGPU blocked anonymous video rendering (quota exceeded). Click "Setup Free GPU" to either paste a FREE $0 Hugging Face token (hf_...) OR launch 1-Click Free Google Colab T4 16 GB for real AI video + audio.';
+    throw new Error(`${authHint} [${videoErrors[videoErrors.length - 1] || 'ZeroGPU unavailable'}]`);
   }
 
-  // Guaranteed $0 zero-wait fallback: Keyframe + Director-Aware Camera Motion + End-Frame Morph
+  // Explicit opt-in only: Browser Keyframe Motion (when user selects ken-burns-local in Engine Settings)
   if (!keyframeDataUrl) {
     onProgress(35, 'Generating $0 HD Keyframe (Stage 1/2)...');
     const still = await generateFreeImageCascade(
@@ -1266,13 +1334,14 @@ export async function runVideoGeneration(
       settings.freeImageModel,
       onProgress,
       shot.negativePrompt,
-      shot.steps
+      shot.steps,
+      hfToken
     );
     keyframeDataUrl = still.dataUrl;
     actualSeed = still.seed;
   }
 
-  onProgress(76, 'Synthesizing Director-Aware cinema camera motion in-browser (Stage 2/2)...');
+  onProgress(76, 'Rendering browser keyframe pan/zoom (explicit No-GPU mode)...');
   const motionBlob = await renderLocalMotionClipFromImage(
     keyframeDataUrl,
     shot.width,
@@ -1281,11 +1350,11 @@ export async function runVideoGeneration(
     shot.rawPrompt,
     shot.endFrameDataUrl
   );
-  onProgress(90, 'Saving video clip into IndexedDB Vault...');
+  onProgress(90, 'Saving clip into IndexedDB Vault...');
   return await attachFreeSyncedAudioIfEnabled({
     blob: motionBlob,
     mimeType: motionBlob.type || 'video/webm',
-    providerLabel: 'Director Cinema Motion ($0 Fallback · ZeroGPU Busy)',
+    providerLabel: 'Still Pan/Zoom (No-GPU Mode)',
     seed: actualSeed,
     thumbnailDataUrl: keyframeDataUrl,
   });

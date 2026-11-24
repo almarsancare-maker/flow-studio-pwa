@@ -782,7 +782,9 @@ export default function App() {
       existingBlob,
       shot.rawPrompt || shot.compiledPrompt,
       shot.durationSec,
-      shot.seed
+      shot.seed,
+      undefined,
+      engineSettings.hfToken
     );
 
     const newBlobKey = `blob_${shot.id}_foley_${Date.now()}`;
@@ -924,6 +926,7 @@ export default function App() {
             })
           }
           onRetryAllFailed={() => void handleRetryAllFailed()}
+          onOpenEngine={() => setEngineOpen(true)}
           onCancelShot={(shot) => void handleDeleteShot(shot)}
           onDownloadShot={(shot) => void handleDownloadShot(shot)}
           onDeleteShot={(shot) => void handleDeleteShot(shot)}

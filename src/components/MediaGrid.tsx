@@ -31,6 +31,7 @@ interface MediaGridProps {
   onRemixShot: (shot: MediaShot) => void;
   onRetryShot: (shot: MediaShot) => void;
   onRetryAllFailed: () => void;
+  onOpenEngine: () => void;
   onCancelShot: (shot: MediaShot) => void;
   onDownloadShot: (shot: MediaShot) => void;
   onDeleteShot: (shot: MediaShot) => void;
@@ -73,6 +74,7 @@ export function MediaGrid({
   onRemixShot,
   onRetryShot,
   onRetryAllFailed,
+  onOpenEngine,
   onCancelShot,
   onDownloadShot,
   onDeleteShot,
@@ -332,20 +334,36 @@ export function MediaGrid({
                     )
                   ) : shot.status === 'failed' ? (
                     <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#b22f25]/15">
-                      <AlertCircle className="w-6 h-6 stroke-[1.5] text-[#fe6e6e] mb-2" />
+                      <AlertCircle className="w-6 h-6 stroke-[1.5] text-[#fe6e6e] mb-1.5" />
                       <p className="text-[13px] font-medium text-white">Render Failed</p>
-                      <p className="text-[12px] text-[#fe6e6e] mt-1 line-clamp-2">{shot.error}</p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRetryShot(shot);
-                        }}
-                        className="flow-btn-glass mt-3 flex items-center gap-1.5 px-3 py-1 text-[12px] font-medium cursor-pointer"
-                      >
-                        <RefreshCw className="w-3 h-3 stroke-[1.6]" />
-                        Retry
-                      </button>
+                      <p className="text-[11px] text-[#fe6e6e] mt-1 line-clamp-3 leading-[16px]">
+                        {shot.error}
+                      </p>
+                      <div className="mt-2.5 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRetryShot(shot);
+                          }}
+                          className="flow-btn-glass flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3 stroke-[1.6]" />
+                          Retry
+                        </button>
+                        {shot.kind === 'video' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenEngine();
+                            }}
+                            className="flow-cta-primary px-3 py-1 text-[11px] cursor-pointer"
+                          >
+                            Setup Free GPU
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#131314]">

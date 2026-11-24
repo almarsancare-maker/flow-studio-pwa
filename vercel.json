@@ -20,7 +20,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|manifest\\.webmanifest|sw\\.js|registerSW\\.js|workbox-.*|icon\\.svg|FlowStudio_Colab_T4_Backend\\.ipynb).*)",
+      "source": "/((?!api/|assets/|fonts/|manifest\\.webmanifest|sw\\.js|registerSW\\.js|workbox-.*|icon\\.svg|FlowStudio_Colab_T4_Backend\\.ipynb).*)",
       "destination": "/index.html"
     }
   ]

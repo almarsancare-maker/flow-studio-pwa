@@ -264,9 +264,11 @@ export default async function handler(req, res) {
               steps: body.steps || 25,
               cfg_scale: body.cfgScale || 6.0,
               seed: body.seed ?? -1,
-              model: body.model || 'cogvideox-2b',
+              model: body.model || 'ltx-0.9.7-distilled',
               mode: body.mode || 't2v',
               start_frame_data_url: body.startFrameDataUrl || null,
+              end_frame_data_url: body.endFrameDataUrl || null,
+              generate_audio: body.generateAudio !== false,
             }),
           },
           25_000

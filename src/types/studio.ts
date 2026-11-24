@@ -76,9 +76,11 @@ export interface MediaShot {
 
 export interface EngineSettings {
   activeEngine: EngineId;
+  hfToken: string;
   colabUrl: string;
   colabModelImage: 'sdxl-turbo' | 'sdxl-base';
-  colabModelVideo: 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
+  colabModelVideo: 'ltx-0.9.7-distilled' | 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
+  colabAudio: boolean;
   freeImageModel: FreeImageModel;
   freeVideoFallback: 'hf-ltx-space' | 'ken-burns-local';
   freeAutoAudio: boolean;
@@ -118,9 +120,11 @@ export const ASPECT_DIMENSIONS: Record<AspectRatio, { image: [number, number]; v
 
 export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   activeEngine: 'free-24-7',
+  hfToken: '',
   colabUrl: '',
   colabModelImage: 'sdxl-turbo',
-  colabModelVideo: 'cogvideox-2b',
+  colabModelVideo: 'ltx-0.9.7-distilled',
+  colabAudio: true,
   freeImageModel: 'flux',
   freeVideoFallback: 'hf-ltx-space',
   freeAutoAudio: true,

@@ -24,6 +24,7 @@ import type {
 import {
   pingColabBackend,
   verifyGeminiOmniApiKey,
+  verifyHfToken,
   verifySeedanceApiKey,
   type ColabHealthStatus,
   type SeedanceKeyStatus,
@@ -69,6 +70,8 @@ export function EngineModal({
   const dirtyRef = useRef(false);
   const wasOpenRef = useRef(false);
   const [testingColab, setTestingColab] = useState(false);
+  const [testingHf, setTestingHf] = useState(false);
+  const [hfStatus, setHfStatus] = useState<SeedanceKeyStatus | null>(null);
   const [testingOmni, setTestingOmni] = useState(false);
   const [omniStatus, setOmniStatus] = useState<SeedanceKeyStatus | null>(null);
   const [testingSeedance, setTestingSeedance] = useState(false);
@@ -105,6 +108,16 @@ export function EngineModal({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const handleTestHf = async () => {
+    setTestingHf(true);
+    try {
+      const result = await verifyHfToken(draft.hfToken);
+      setHfStatus(result);
+    } finally {
+      setTestingHf(false);
+    }
+  };
 
   const handleTestColab = async () => {
     setTestingColab(true);
@@ -288,13 +301,85 @@ export function EngineModal({
                   className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
                   <option value="hf-ltx-space" className="bg-[#131314]">
-                    Wan 2.2 14B + LTX-Video ($0 Cascade)
+                    Real AI Video: Wan 2.2 14B + LTX-Video ($0 ZeroGPU)
                   </option>
                   <option value="ken-burns-local" className="bg-[#131314]">
-                    Instant 2-Stage Keyframe + Cinema Motion
+                    Still Pan/Zoom Only (No GPU / Not AI Video)
                   </option>
                 </select>
               </div>
+            </div>
+
+            {/* Free Hugging Face Token ($0 — unlocks 5x ZeroGPU quota so Wan 2.2 & LTX-Video actually run!) */}
+            <div className="rounded-[12px] border border-white/15 bg-black/40 p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-[12px] font-medium text-white">
+                  Free Hugging Face Token ($0 — Required for Wan 2.2 &amp; LTX-Video ZeroGPU)
+                </label>
+                <a
+                  href="https://huggingface.co/settings/tokens/new?tokenType=read"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flow-btn-glass inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                >
+                  Get Free Token ($0)
+                  <ExternalLink className="w-3 h-3 stroke-[1.6]" />
+                </a>
+              </div>
+              <p className="text-[11px] text-white/55 leading-[16px]">
+                ZeroGPU blocks anonymous video requests immediately. A free Read token unlocks real
+                Wan 2.2 14B, LTX-Video &amp; MMAudio directly in your browser (no credit card).
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    data-testid="hf-token-input"
+                    autoComplete="off"
+                    value={draft.hfToken}
+                    onChange={(e) => {
+                      setDraft({ ...draft, hfToken: e.target.value });
+                      setHfStatus(null);
+                    }}
+                    placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
+                  />
+                </div>
+                <button
+                  type="button"
+                  data-testid="hf-verify-btn"
+                  disabled={testingHf || !draft.hfToken.trim()}
+                  onClick={() => void handleTestHf()}
+                  className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer shrink-0"
+                >
+                  {testingHf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  Verify Token
+                </button>
+              </div>
+              {hfStatus && (
+                <div
+                  className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
+                    hfStatus.valid
+                      ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                      : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                  }`}
+                >
+                  {hfStatus.valid ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
+                      <span>
+                        Verified <strong>{hfStatus.account}</strong> — 5× Free ZeroGPU Video Quota active!
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
+                      <span>{hfStatus.error}</span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[12px] bg-black/45 border border-white/15 text-[12px] text-white/85 cursor-pointer">
@@ -427,12 +512,37 @@ export function EngineModal({
                   }
                   className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
-                  <option value="cogvideox-2b" className="bg-[#131314]">CogVideoX-2B (Best T4 16GB T2V)</option>
-                  <option value="ltx-video" className="bg-[#131314]">LTX-Video (Fast T2V + Start-Frame I2V)</option>
-                  <option value="wan2.1-1.3b" className="bg-[#131314]">Wan2.1-1.3B (High-Motion Open T2V)</option>
+                  <option value="ltx-0.9.7-distilled" className="bg-[#131314]">
+                    LTX-Video 0.9.7 Distilled (OmniLocal 1.2 Fast 8-Step · T2V/I2V/FLF)
+                  </option>
+                  <option value="wan2.1-1.3b" className="bg-[#131314]">
+                    Wan2.1-1.3B (High-Motion Open T2V)
+                  </option>
+                  <option value="cogvideox-2b" className="bg-[#131314]">
+                    CogVideoX-2B (T4 16GB T2V)
+                  </option>
+                  <option value="ltx-video" className="bg-[#131314]">
+                    LTX-Video 0.9.5 Legacy
+                  </option>
                 </select>
               </div>
             </div>
+
+            <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[12px] bg-black/45 border border-white/15 text-[12px] text-white/85 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.colabAudio}
+                onChange={(e) => setDraft({ ...draft, colabAudio: e.target.checked })}
+                className="accent-white"
+              />
+              <Volume2 className="w-4 h-4 stroke-[1.6] text-[#29c58f] shrink-0" />
+              <span>
+                <strong className="font-medium text-white">
+                  Generate Synchronized AI Audio on T4 GPU ($0 AudioLDM2 + FFmpeg)
+                </strong>{' '}
+                — muxes realistic foley &amp; ambient sound directly into the Colab MP4.
+              </span>
+            </label>
           </div>
 
           {/* Collapsible Optional Paid BYOK Cloud APIs */}
