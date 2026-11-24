@@ -1,13 +1,5 @@
 import { setCorsHeaders } from './_ssrf.js';
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
-}
+import { applyRateLimitHeaders, checkRateLimit, readJsonBodySafe } from './_rateLimit.js';
 
 function clampDim(val, fallback) {
   const n = Number(val);
@@ -124,11 +116,20 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
+  const rl = checkRateLimit(req, { keyPrefix: 'image', maxRequests: 40, windowMs: 60_000 });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.allowed) {
+    return res.status(429).json({ ok: false, error: `Rate limit exceeded. Retry in ${rl.retryAfterSec}s.` });
+  }
+
   try {
-    const body = await readJsonBody(req);
+    const body = await readJsonBodySafe(req, 64_000);
     const prompt = String(body.prompt || '').trim();
     if (!prompt) {
       return res.status(400).json({ ok: false, error: 'Prompt is required.' });
+    }
+    if (prompt.length > 4000) {
+      return res.status(400).json({ ok: false, error: 'Prompt exceeds 4,000 characters.' });
     }
 
     const width = clampDim(body.width, 1024);
@@ -158,6 +159,8 @@ export default async function handler(req, res) {
       error: `All $0 image providers failed (${errors.join(' | ')}). Connect Colab T4 or retry shortly.`,
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err?.message || 'Internal image API error' });
+    return res
+      .status(err?.statusCode || 500)
+      .json({ ok: false, error: err?.message || 'Internal image API error' });
   }
 }

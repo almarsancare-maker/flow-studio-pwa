@@ -1,12 +1,22 @@
 import { setCorsHeaders } from './_ssrf.js';
+import {
+  applyRateLimitHeaders,
+  checkRateLimit,
+  fetchWithAbort,
+  readJsonBodySafe,
+} from './_rateLimit.js';
 
 /**
- * Stateless BYOK relay for ByteDance Seedance (2.5 / 2.0 / 1.5 Pro / 1.0 Pro)
+ * Stateless, hardened BYOK / Server-Key relay for ByteDance Seedance (2.5 / 2.0 / 1.5 Pro / 1.0 Pro)
  * via Replicate or fal.ai.
  *
- * Security guarantees:
- * - User API keys are NEVER persisted or logged; used strictly in-memory for the active request.
- * - Strict host & model allowlist prevents SSRF to arbitrary hosts or internal IPs.
+ * 100M-scale hardening:
+ * - Strict payload ceiling (4.5 MB max for I2V base64 frames) -> HTTP 413
+ * - Per-IP sliding-window rate limiting -> HTTP 429 + Retry-After
+ * - Strict host & model allowlist (zero SSRF; tight Replicate/fal delivery hosts only)
+ * - Explicit AbortController timeouts on every upstream call
+ * - Video download content-type + 50 MB memory cap
+ * - Zero secret logging or persistence
  */
 
 const REPLICATE_MODEL_RE = /^bytedance\/seedance[a-z0-9.-]{0,40}$/i;
@@ -18,16 +28,17 @@ const ALLOWED_DOWNLOAD_HOSTS = [
   /(?:^|\.)fal\.media$/i,
   /(?:^|\.)fal\.ai$/i,
   /(?:^|\.)fal\.run$/i,
-  /(?:^|\.)googleapis\.com$/i,
-  /(?:^|\.)cloudfront\.net$/i,
 ];
+
+const MAX_VIDEO_DOWNLOAD_BYTES = 50 * 1024 * 1024;
+const UA_HEADERS = { 'User-Agent': 'CabardoStudio/1.0' };
 
 export function validateSeedanceModel(provider, model) {
   if (typeof model !== 'string' || !model.trim()) {
     return { ok: false, error: 'Missing Seedance model ID.' };
   }
   const clean = model.trim().replace(/^\/+|\/+$/g, '');
-  if (clean.includes('..') || clean.includes('?') || clean.includes('#')) {
+  if (clean.includes('..') || clean.includes('?') || clean.includes('#') || clean.includes('\\')) {
     return { ok: false, error: 'Invalid characters in Seedance model ID.' };
   }
   if (provider === 'replicate') {
@@ -59,13 +70,17 @@ export function validateSeedancePollUrl(provider, rawUrl) {
     return { ok: false, error: 'Poll URL must be plain HTTPS.' };
   }
   if (provider === 'replicate') {
-    if (parsed.hostname !== 'api.replicate.com' || !parsed.pathname.startsWith('/v1/predictions/')) {
+    if (
+      parsed.hostname !== 'api.replicate.com' ||
+      !parsed.pathname.startsWith('/v1/predictions/') ||
+      parsed.pathname.includes('..')
+    ) {
       return { ok: false, error: 'Disallowed Replicate poll URL.' };
     }
     return { ok: true, url: parsed.toString() };
   }
   if (provider === 'fal') {
-    if (parsed.hostname !== 'queue.fal.run') {
+    if (parsed.hostname !== 'queue.fal.run' || parsed.pathname.includes('..')) {
       return { ok: false, error: 'Disallowed fal.ai poll URL.' };
     }
     return { ok: true, url: parsed.toString() };
@@ -88,15 +103,6 @@ export function validateSeedanceDownloadUrl(rawUrl) {
     return { ok: false, error: `Disallowed media host: ${parsed.hostname}` };
   }
   return { ok: true, url: parsed.toString() };
-}
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
 }
 
 function extractVideoUrl(obj) {
@@ -127,8 +133,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = await readJsonBody(req);
+    const body = await readJsonBodySafe(req, 4_500_000);
     const action = String(body.action || '');
+
+    // Tighter rate limit on expensive submit/verify actions; generous on polling
+    const rl = checkRateLimit(req, {
+      keyPrefix: `seedance:${action === 'poll' ? 'poll' : 'exec'}`,
+      maxRequests: action === 'poll' ? 180 : 25,
+      windowMs: 60_000,
+    });
+    applyRateLimitHeaders(res, rl);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        ok: false,
+        error: `Rate limit exceeded. Retry in ${rl.retryAfterSec}s.`,
+      });
+    }
+
     const provider = body.provider === 'fal' ? 'fal' : 'replicate';
     const userSuppliedKey = String(body.apiKey || '').trim();
     const envFallbackKey =
@@ -136,19 +157,27 @@ export default async function handler(req, res) {
         ? String(process.env.REPLICATE_API_TOKEN || '').trim()
         : String(process.env.FAL_KEY || '').trim();
     const apiKey = userSuppliedKey || envFallbackKey;
-    const uaHeaders = { 'User-Agent': 'CabardoStudio/1.0' };
 
     if (action === 'download') {
       const dlCheck = validateSeedanceDownloadUrl(body.videoUrl);
       if (!dlCheck.ok) return res.status(400).json({ ok: false, error: dlCheck.error });
-      const upstream = await fetch(dlCheck.url);
+      const upstream = await fetchWithAbort(dlCheck.url, { headers: UA_HEADERS }, 40_000);
       if (!upstream.ok) {
         return res.status(502).json({ ok: false, error: `Video download HTTP ${upstream.status}` });
       }
-      const ctype = upstream.headers.get('content-type') || 'video/mp4';
+      const ctype = (upstream.headers.get('content-type') || 'video/mp4').toLowerCase();
+      if (!ctype.startsWith('video/') && !ctype.startsWith('application/octet-stream')) {
+        return res.status(400).json({ ok: false, error: `Unexpected media type: ${ctype}` });
+      }
+      const contentLen = Number(upstream.headers.get('content-length') || 0);
+      if (contentLen > MAX_VIDEO_DOWNLOAD_BYTES) {
+        return res.status(413).json({ ok: false, error: 'Video exceeds 50 MB relay limit.' });
+      }
       const buf = Buffer.from(await upstream.arrayBuffer());
-      res.setHeader('Content-Type', ctype);
-      res.setHeader('Cache-Control', 'no-store');
+      if (buf.length > MAX_VIDEO_DOWNLOAD_BYTES) {
+        return res.status(413).json({ ok: false, error: 'Video exceeds 50 MB relay limit.' });
+      }
+      res.setHeader('Content-Type', ctype.split(';')[0]);
       return res.status(200).send(buf);
     }
 
@@ -156,12 +185,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: 'Enter your Seedance API key first.' });
     }
 
-    // ── VERIFY API KEY ─────────────────────────────────────────────────
+    // Optional studio PIN guard when server env STUDIO_PIN is configured
+    const requiredPin = String(process.env.STUDIO_PIN || '').trim();
+    if (requiredPin && !userSuppliedKey && String(body.studioPin || '').trim() !== requiredPin) {
+      return res.status(401).json({ ok: false, error: 'Studio PIN required for server key.' });
+    }
+
     if (action === 'verify') {
       if (provider === 'replicate') {
-        const resp = await fetch('https://api.replicate.com/v1/account', {
-          headers: { Authorization: `Bearer ${apiKey}`, ...uaHeaders },
-        });
+        const resp = await fetchWithAbort(
+          'https://api.replicate.com/v1/account',
+          { headers: { Authorization: `Bearer ${apiKey}`, ...UA_HEADERS } },
+          15_000
+        );
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
           return res.status(200).json({
@@ -177,16 +213,19 @@ export default async function handler(req, res) {
         });
       }
 
-      // fal.ai key check against Seedance 2.0 status/endpoint (valid key returns 422/400 validation instead of 401)
-      const resp = await fetch('https://queue.fal.run/bytedance/seedance-2.0/text-to-video', {
-        method: 'POST',
-        headers: {
-          Authorization: `Key ${apiKey}`,
-          'Content-Type': 'application/json',
-          ...uaHeaders,
+      const resp = await fetchWithAbort(
+        'https://queue.fal.run/bytedance/seedance-2.0/text-to-video',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Key ${apiKey}`,
+            'Content-Type': 'application/json',
+            ...UA_HEADERS,
+          },
+          body: JSON.stringify({}),
         },
-        body: JSON.stringify({}),
-      });
+        15_000
+      );
       if (resp.status === 401 || resp.status === 403) {
         const errData = await resp.json().catch(() => ({}));
         return res.status(200).json({
@@ -197,19 +236,26 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         provider: 'fal',
+        usingServerKey: !userSuppliedKey && Boolean(envFallbackKey),
         account: 'fal.ai Key Verified (Seedance Ready)',
       });
     }
 
-    // ── SUBMIT ASYNC SEEDANCE VIDEO JOB ────────────────────────────────
     if (action === 'submit') {
       const prompt = String(body.prompt || '').trim();
       if (!prompt) return res.status(400).json({ ok: false, error: 'Prompt is required.' });
+      if (prompt.length > 4000) {
+        return res.status(400).json({ ok: false, error: 'Prompt exceeds 4,000 characters.' });
+      }
 
       const isI2V =
         body.mode === 'i2v' &&
         typeof body.startFrameDataUrl === 'string' &&
         body.startFrameDataUrl.startsWith('data:image/');
+      const hasEndFrame =
+        isI2V &&
+        typeof body.endFrameDataUrl === 'string' &&
+        body.endFrameDataUrl.startsWith('data:image/');
 
       const resolution = ['480p', '720p', '1080p'].includes(body.resolution)
         ? body.resolution
@@ -218,7 +264,10 @@ export default async function handler(req, res) {
         ? body.aspectRatio
         : '16:9';
       const durationSec = Math.max(4, Math.min(10, Math.round(Number(body.durationSec) || 5)));
-      const seed = Number.isInteger(Number(body.seed)) && Number(body.seed) >= 0 ? Number(body.seed) : undefined;
+      const seed =
+        Number.isInteger(Number(body.seed)) && Number(body.seed) >= 0
+          ? Number(body.seed)
+          : undefined;
       const generateAudio = body.generateAudio !== false;
 
       if (provider === 'replicate') {
@@ -228,9 +277,7 @@ export default async function handler(req, res) {
         const isSeedance2x =
           mCheck.model.includes('seedance-2.5') || mCheck.model.includes('seedance-2.0');
         const isSeedance1Pro = mCheck.model === 'bytedance/seedance-1-pro';
-        // Seedance 2.5 / 2.0 on Replicate accept "480p" or "720p"; First/Last-Frame I2V requires aspect_ratio="adaptive"
-        const effectiveRes =
-          isSeedance2x && resolution === '1080p' ? '720p' : resolution;
+        const effectiveRes = isSeedance2x && resolution === '1080p' ? '720p' : resolution;
         const effectiveAr = isSeedance2x && isI2V ? 'adaptive' : aspectRatio;
 
         const input = {
@@ -242,18 +289,22 @@ export default async function handler(req, res) {
           ...(isSeedance2x ? { watermark: false, output_format: 'mp4' } : {}),
           ...(seed !== undefined ? { seed } : {}),
           ...(isI2V ? { image: body.startFrameDataUrl } : {}),
-          ...(body.endFrameDataUrl ? { last_frame_image: body.endFrameDataUrl } : {}),
+          ...(hasEndFrame ? { last_frame_image: body.endFrameDataUrl } : {}),
         };
 
-        const resp = await fetch(`https://api.replicate.com/v1/models/${mCheck.model}/predictions`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            ...uaHeaders,
+        const resp = await fetchWithAbort(
+          `https://api.replicate.com/v1/models/${mCheck.model}/predictions`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+              ...UA_HEADERS,
+            },
+            body: JSON.stringify({ input }),
           },
-          body: JSON.stringify({ input }),
-        });
+          25_000
+        );
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data?.id) {
           return res.status(resp.status >= 400 ? resp.status : 502).json({
@@ -270,7 +321,6 @@ export default async function handler(req, res) {
         });
       }
 
-      // fal.ai Seedance endpoint (auto-adjust text-to-video <-> image-to-video suffix)
       let falModel = String(body.model || 'bytedance/seedance-2.5/text-to-video').trim();
       if (isI2V && falModel.endsWith('/text-to-video')) {
         falModel = falModel.replace(/\/text-to-video$/, '/image-to-video');
@@ -291,17 +341,22 @@ export default async function handler(req, res) {
         generate_audio: generateAudio,
         ...(seed !== undefined ? { seed } : {}),
         ...(isI2V ? { image_url: body.startFrameDataUrl } : {}),
-        ...(body.endFrameDataUrl ? { end_image_url: body.endFrameDataUrl } : {}),
+        ...(hasEndFrame ? { end_image_url: body.endFrameDataUrl } : {}),
       };
 
-      const resp = await fetch(`https://queue.fal.run/${mCheck.model}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Key ${apiKey}`,
-          'Content-Type': 'application/json',
+      const resp = await fetchWithAbort(
+        `https://queue.fal.run/${mCheck.model}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Key ${apiKey}`,
+            'Content-Type': 'application/json',
+            ...UA_HEADERS,
+          },
+          body: JSON.stringify(falInput),
         },
-        body: JSON.stringify(falInput),
-      });
+        25_000
+      );
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data?.request_id) {
         return res.status(resp.status >= 400 ? resp.status : 502).json({
@@ -319,15 +374,16 @@ export default async function handler(req, res) {
       });
     }
 
-    // ── POLL SEEDANCE JOB STATUS ───────────────────────────────────────
     if (action === 'poll') {
       const pCheck = validateSeedancePollUrl(provider, body.pollUrl);
       if (!pCheck.ok) return res.status(400).json({ ok: false, error: pCheck.error });
 
       if (provider === 'replicate') {
-        const resp = await fetch(pCheck.url, {
-          headers: { Authorization: `Bearer ${apiKey}`, ...uaHeaders },
-        });
+        const resp = await fetchWithAbort(
+          pCheck.url,
+          { headers: { Authorization: `Bearer ${apiKey}`, ...UA_HEADERS } },
+          15_000
+        );
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
           return res.status(resp.status).json({
@@ -371,10 +427,11 @@ export default async function handler(req, res) {
         });
       }
 
-      // fal.ai status poll
-      const resp = await fetch(pCheck.url, {
-        headers: { Authorization: `Key ${apiKey}` },
-      });
+      const resp = await fetchWithAbort(
+        pCheck.url,
+        { headers: { Authorization: `Key ${apiKey}`, ...UA_HEADERS } },
+        15_000
+      );
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         return res.status(resp.status).json({
@@ -396,9 +453,11 @@ export default async function handler(req, res) {
         if (!rCheck.ok) {
           return res.status(200).json({ ok: false, status: 'failed', error: rCheck.error });
         }
-        const resResp = await fetch(rCheck.url, {
-          headers: { Authorization: `Key ${apiKey}` },
-        });
+        const resResp = await fetchWithAbort(
+          rCheck.url,
+          { headers: { Authorization: `Key ${apiKey}`, ...UA_HEADERS } },
+          15_000
+        );
         const resData = await resResp.json().catch(() => ({}));
         const videoUrl = extractVideoUrl(resData);
         if (!videoUrl) {
@@ -429,6 +488,10 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
   } catch (err) {
-    return res.status(502).json({ ok: false, error: err?.message || 'Seedance relay error' });
+    const code = err?.statusCode || (err?.name === 'AbortError' ? 504 : 502);
+    return res.status(code).json({
+      ok: false,
+      error: err?.name === 'AbortError' ? 'Upstream Seedance API timed out.' : err?.message || 'Seedance relay error',
+    });
   }
 }

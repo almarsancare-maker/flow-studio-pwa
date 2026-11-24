@@ -1,15 +1,12 @@
 import { setCorsHeaders, validateColabBaseUrl } from './_ssrf.js';
+import {
+  applyRateLimitHeaders,
+  checkRateLimit,
+  fetchWithAbort,
+  readJsonBodySafe,
+} from './_rateLimit.js';
 
 const LTX_SPACE_HOST = 'https://lightricks-ltx-video-distilled.hf.space';
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
-}
 
 async function uploadImageToGradio(host, dataUrl) {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
@@ -198,6 +195,16 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
+  const rl = checkRateLimit(req, {
+    keyPrefix: `video:${req.method}`,
+    maxRequests: req.method === 'GET' ? 180 : 30,
+    windowMs: 60_000,
+  });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.allowed) {
+    return res.status(429).json({ ok: false, error: `Rate limit exceeded. Retry in ${rl.retryAfterSec}s.` });
+  }
+
   try {
     if (req.method === 'GET') {
       const provider = String(req.query?.provider || '');
@@ -213,9 +220,11 @@ export default async function handler(req, res) {
         if (!/^[a-zA-Z0-9_-]{4,64}$/.test(taskId)) {
           return res.status(400).json({ ok: false, error: 'Invalid Colab job id' });
         }
-        const upstream = await fetch(`${check.origin}/api/job/${taskId}`, {
-          headers: { Accept: 'application/json' },
-        });
+        const upstream = await fetchWithAbort(
+          `${check.origin}/api/job/${taskId}`,
+          { headers: { Accept: 'application/json' } },
+          15_000
+        );
         const data = await upstream.json();
         return res.status(upstream.status).json(data);
       }
@@ -230,7 +239,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const body = await readJsonBody(req);
+      const body = await readJsonBodySafe(req, 4_500_000);
       const prompt = String(body.prompt || '').trim();
       if (!prompt) {
         return res.status(400).json({ ok: false, error: 'Prompt is required.' });
@@ -241,23 +250,27 @@ export default async function handler(req, res) {
         if (!check.ok) {
           return res.status(400).json({ ok: false, error: check.error });
         }
-        const upstream = await fetch(`${check.origin}/api/video`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt,
-            negative_prompt: body.negativePrompt || '',
-            width: body.width || 720,
-            height: body.height || 480,
-            duration_sec: body.durationSec || 4,
-            steps: body.steps || 25,
-            cfg_scale: body.cfgScale || 6.0,
-            seed: body.seed ?? -1,
-            model: body.model || 'cogvideox-2b',
-            mode: body.mode || 't2v',
-            start_frame_data_url: body.startFrameDataUrl || null,
-          }),
-        });
+        const upstream = await fetchWithAbort(
+          `${check.origin}/api/video`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt,
+              negative_prompt: body.negativePrompt || '',
+              width: body.width || 720,
+              height: body.height || 480,
+              duration_sec: body.durationSec || 4,
+              steps: body.steps || 25,
+              cfg_scale: body.cfgScale || 6.0,
+              seed: body.seed ?? -1,
+              model: body.model || 'cogvideox-2b',
+              mode: body.mode || 't2v',
+              start_frame_data_url: body.startFrameDataUrl || null,
+            }),
+          },
+          25_000
+        );
         const data = await upstream.json();
         return res.status(upstream.status).json({
           ok: upstream.ok,

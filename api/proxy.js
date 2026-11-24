@@ -1,18 +1,16 @@
 import { setCorsHeaders, validateColabBaseUrl, validateColabPath } from './_ssrf.js';
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
-}
+import { applyRateLimitHeaders, checkRateLimit, readJsonBodySafe } from './_rateLimit.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
+  }
+
+  const rl = checkRateLimit(req, { keyPrefix: 'proxy', maxRequests: 90, windowMs: 60_000 });
+  applyRateLimitHeaders(res, rl);
+  if (!rl.allowed) {
+    return res.status(429).json({ ok: false, error: `Rate limit exceeded. Retry in ${rl.retryAfterSec}s.` });
   }
 
   try {
@@ -26,7 +24,7 @@ export default async function handler(req, res) {
       targetPath = String(req.query?.path || '/api/health');
       forwardMethod = 'GET';
     } else if (req.method === 'POST') {
-      const body = await readJsonBody(req);
+      const body = await readJsonBodySafe(req, 4_500_000);
       colabUrl = String(body.colabUrl || '');
       targetPath = String(body.path || '/api/health');
       forwardMethod = body.method === 'GET' ? 'GET' : 'POST';

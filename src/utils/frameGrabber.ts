@@ -50,14 +50,23 @@ export async function grabVideoFrame(
     });
   }
 
+  const maxSide = 1024;
+  let w = video.videoWidth;
+  let h = video.videoHeight;
+  if (w > maxSide || h > maxSide) {
+    const scale = maxSide / Math.max(w, h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context unavailable.');
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  const dataUrl = canvas.toDataURL('image/png');
+  // Compact high-quality JPEG keeps I2V payloads fast & well within serverless + IndexedDB budgets
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
   return {
     dataUrl,
     width: canvas.width,

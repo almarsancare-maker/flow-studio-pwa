@@ -134,7 +134,17 @@ export async function deleteShot(id: string): Promise<void> {
 
 // ── Binary Media Blobs (Offline Permanent Storage) ────────────────────
 export async function saveBlob(key: string, blob: Blob): Promise<void> {
-  await txRun(STORES.BLOBS, 'readwrite', (s) => s.put({ key, blob, savedAt: Date.now() }));
+  try {
+    await txRun(STORES.BLOBS, 'readwrite', (s) => s.put({ key, blob, savedAt: Date.now() }));
+  } catch (err) {
+    const name = err instanceof DOMException ? err.name : '';
+    if (name === 'QuotaExceededError') {
+      throw new Error(
+        'Browser offline Vault is full. Delete older shots or export your project JSON to free space.'
+      );
+    }
+    throw err;
+  }
 }
 
 export async function loadBlob(key: string): Promise<Blob | null> {
