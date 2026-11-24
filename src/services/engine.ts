@@ -10,6 +10,12 @@ export interface ColabHealthStatus {
   error?: string;
 }
 
+export interface SeedanceKeyStatus {
+  valid: boolean;
+  account?: string;
+  error?: string;
+}
+
 export interface GenerationResult {
   blob: Blob;
   mimeType: string;
@@ -358,6 +364,34 @@ async function generateVideoViaDirectHfLtx(
   };
 }
 
+export async function verifySeedanceApiKey(
+  provider: 'replicate' | 'fal',
+  apiKey: string
+): Promise<SeedanceKeyStatus> {
+  const cleaned = apiKey.trim();
+  if (!cleaned) {
+    return { valid: false, error: 'Paste your Replicate or fal.ai API key first.' };
+  }
+  try {
+    const resp = await fetchWithTimeout(
+      '/api/seedance',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', provider, apiKey: cleaned }),
+      },
+      15_000
+    );
+    const data = await resp.json();
+    if (!resp.ok || !data?.ok) {
+      return { valid: false, error: data?.error || `HTTP ${resp.status}` };
+    }
+    return { valid: true, account: data.account || 'Verified' };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : 'Verification failed' };
+  }
+}
+
 export async function pingColabBackend(colabUrl: string): Promise<ColabHealthStatus> {
   const cleaned = colabUrl.trim().replace(/\/+$/, '');
   if (!cleaned) {
@@ -455,6 +489,95 @@ export async function runVideoGeneration(
   settings: EngineSettings,
   onProgress: (pct: number, phase: string) => void
 ): Promise<GenerationResult> {
+  // Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) via user's BYOK key
+  if (settings.activeEngine === 'seedance-byok') {
+    const apiKey = settings.seedanceApiKey.trim();
+    if (!apiKey) {
+      throw new Error('Seedance Engine selected, but no API key is saved. Open Engine Settings to paste your Replicate or fal.ai key.');
+    }
+    const provider = settings.seedanceProvider;
+    const model = settings.seedanceModel || (provider === 'replicate' ? 'bytedance/seedance-2.5' : 'bytedance/seedance-2.5/text-to-video');
+    onProgress(10, `Submitting ${shot.mode.toUpperCase()} to Seedance (${provider})...`);
+
+    const submitResp = await fetchWithTimeout(
+      '/api/seedance',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit',
+          provider,
+          apiKey,
+          model,
+          mode: shot.mode,
+          prompt: shot.compiledPrompt,
+          aspectRatio: shot.aspectRatio,
+          durationSec: shot.durationSec,
+          resolution: settings.seedanceResolution,
+          generateAudio: settings.seedanceAudio,
+          seed: shot.seed,
+          startFrameDataUrl: shot.startFrameDataUrl,
+          endFrameDataUrl: shot.endFrameDataUrl,
+        }),
+      },
+      25_000
+    );
+    const submitData = await submitResp.json();
+    if (!submitResp.ok || !submitData?.ok || !submitData?.pollUrl) {
+      throw new Error(submitData?.error || `Seedance submit failed (HTTP ${submitResp.status})`);
+    }
+
+    for (let attempt = 0; attempt < 150; attempt++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const pollResp = await fetchWithTimeout(
+        '/api/seedance',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'poll',
+            provider,
+            apiKey,
+            pollUrl: submitData.pollUrl,
+            responseUrl: submitData.responseUrl,
+          }),
+        },
+        20_000
+      );
+      const poll = await pollResp.json();
+      if (poll.status === 'failed') {
+        throw new Error(poll.error || 'Seedance generation failed');
+      }
+      onProgress(
+        Math.min(92, Math.max(18, Number(poll.progress) || 20 + attempt * 2)),
+        poll.phase || 'Diffusing cinema video on Seedance...'
+      );
+      if (poll.status === 'completed' && poll.videoUrl) {
+        onProgress(95, 'Saving Seedance MP4 permanently into local IndexedDB Vault...');
+        const dlResp = await fetchWithTimeout(
+          '/api/seedance',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'download', videoUrl: poll.videoUrl }),
+          },
+          45_000
+        );
+        if (!dlResp.ok) throw new Error(`Seedance MP4 download HTTP ${dlResp.status}`);
+        const blob = await dlResp.blob();
+        const shortModel = model.replace(/^fal-ai\//, '').replace(/^bytedance\//, '');
+        return {
+          blob,
+          mimeType: blob.type || 'video/mp4',
+          providerLabel: `Seedance (${shortModel} · ${settings.seedanceResolution}${settings.seedanceAudio ? ' + Audio' : ''})`,
+          seed: shot.seed,
+          thumbnailDataUrl: shot.startFrameDataUrl,
+        };
+      }
+    }
+    throw new Error('Seedance render timed out after 7.5 minutes.');
+  }
+
   const useColab = settings.activeEngine === 'colab-t4' && settings.colabUrl.trim().length > 0;
 
   if (useColab) {

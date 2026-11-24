@@ -1,6 +1,8 @@
 export type GenerationMode = 't2i' | 't2v' | 'i2v';
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '21:9';
-export type EngineId = 'free-24-7' | 'colab-t4';
+export type EngineId = 'free-24-7' | 'colab-t4' | 'seedance-byok';
+export type SeedanceProvider = 'replicate' | 'fal';
+export type SeedanceResolution = '480p' | '720p' | '1080p';
 export type BibleCategory = 'character' | 'location' | 'prop' | 'style';
 export type ShotStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -67,6 +69,11 @@ export interface EngineSettings {
   colabModelVideo: 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
   freeImageModel: 'flux' | 'turbo';
   freeVideoFallback: 'hf-ltx-space' | 'ken-burns-local';
+  seedanceProvider: SeedanceProvider;
+  seedanceApiKey: string;
+  seedanceModel: string;
+  seedanceResolution: SeedanceResolution;
+  seedanceAudio: boolean;
   autoSaveToVault: boolean;
 }
 
@@ -100,5 +107,10 @@ export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   colabModelVideo: 'cogvideox-2b',
   freeImageModel: 'flux',
   freeVideoFallback: 'hf-ltx-space',
+  seedanceProvider: 'replicate',
+  seedanceApiKey: '',
+  seedanceModel: 'bytedance/seedance-2.5',
+  seedanceResolution: '720p',
+  seedanceAudio: true,
   autoSaveToVault: true,
 };

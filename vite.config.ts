@@ -11,6 +11,7 @@ function localVercelApiPlugin(): Plugin {
     '/api/image': 'api/image.js',
     '/api/video': 'api/video.js',
     '/api/proxy': 'api/proxy.js',
+    '/api/seedance': 'api/seedance.js',
   };
 
   return {

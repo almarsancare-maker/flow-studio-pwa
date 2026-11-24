@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import healthHandler from '../api/health.js';
 import proxyHandler from '../api/proxy.js';
 import imageHandler from '../api/image.js';
+import seedanceHandler, {
+  validateSeedanceDownloadUrl,
+  validateSeedanceModel,
+  validateSeedancePollUrl,
+} from '../api/seedance.js';
 import { validateColabBaseUrl, validateColabPath } from '../api/_ssrf.js';
 
 function createMockRes() {
@@ -102,6 +107,39 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
       res.result.body.dataUrl.length / 1024
     )} KB base64)`
   );
+}
+
+// Test 5: Seedance BYOK SSRF & allowlist guards
+{
+  assert.equal(validateSeedanceModel('replicate', 'bytedance/seedance-2.5').ok, true);
+  assert.equal(validateSeedanceModel('replicate', 'evil/other-model').ok, false);
+  assert.equal(validateSeedanceModel('fal', 'bytedance/seedance-2.5/image-to-video').ok, true);
+  assert.equal(validateSeedanceModel('fal', 'https://169.254.169.254/meta').ok, false);
+
+  assert.equal(
+    validateSeedancePollUrl('replicate', 'https://api.replicate.com/v1/predictions/abc123').ok,
+    true
+  );
+  assert.equal(
+    validateSeedancePollUrl('replicate', 'https://evil.com/v1/predictions/abc123').ok,
+    false
+  );
+  assert.equal(
+    validateSeedancePollUrl('fal', 'https://queue.fal.run/bytedance/seedance-2.5/requests/r1/status').ok,
+    true
+  );
+  assert.equal(validateSeedanceDownloadUrl('https://replicate.delivery/pbxt/vid.mp4').ok, true);
+  assert.equal(validateSeedanceDownloadUrl('https://v3.fal.media/files/vid.mp4').ok, true);
+  assert.equal(validateSeedanceDownloadUrl('http://127.0.0.1/secret.mp4').ok, false);
+
+  const resMissingKey = createMockRes();
+  await seedanceHandler({ method: 'POST', body: { action: 'verify', provider: 'replicate', apiKey: '' } }, resMissingKey);
+  assert.equal(resMissingKey.result.statusCode, 400);
+
+  const resBadDl = createMockRes();
+  await seedanceHandler({ method: 'POST', body: { action: 'download', videoUrl: 'https://169.254.169.254/latest' } }, resBadDl);
+  assert.equal(resBadDl.result.statusCode, 400);
+  console.log('[PASS] Test 5: /api/seedance model, poll, and media download SSRF guards verified');
 }
 
 console.log('ALL_PHASE2_API_TESTS_PASSED');

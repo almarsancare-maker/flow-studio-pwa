@@ -9,6 +9,7 @@ import {
   HardDrive,
   Smartphone,
   Sparkles,
+  Zap,
 } from 'lucide-react';
 import type { EngineSettings, Project } from '../types/studio';
 import type { ColabHealthStatus } from '../services/engine';
@@ -58,7 +59,9 @@ export function TopBar({
   };
 
   const isColabActive = engineSettings.activeEngine === 'colab-t4';
+  const isSeedanceActive = engineSettings.activeEngine === 'seedance-byok';
   const colabConnected = isColabActive && colabHealth?.online;
+  const seedanceHasKey = isSeedanceActive && engineSettings.seedanceApiKey.trim().length > 0;
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-800/80 flow-glass">
@@ -164,26 +167,34 @@ export function TopBar({
             <span className="hidden md:inline">Import Script</span>
           </button>
 
-          {/* Fix #6: Dual $0 GPU Engine Switcher */}
+          {/* Fix #6: 3-Engine Compute Switcher (Free Cloud / Free Colab T4 / Seedance 2.5 BYOK) */}
           <button
             type="button"
             onClick={onOpenEngine}
             data-testid="open-engine-btn"
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
-              colabConnected
+              seedanceHasKey
+                ? 'bg-violet-500/20 border-violet-400/50 text-violet-200'
+                : colabConnected
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
-                : isColabActive
+                : isColabActive || isSeedanceActive
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
                 : 'bg-zinc-900/90 border-zinc-800 text-zinc-200 hover:border-zinc-600'
             }`}
           >
-            {isColabActive ? (
+            {isSeedanceActive ? (
+              <Zap className="w-3.5 h-3.5 text-violet-400" />
+            ) : isColabActive ? (
               <Cpu className="w-3.5 h-3.5 text-emerald-400" />
             ) : (
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             )}
             <span className="hidden sm:inline">
-              {colabConnected
+              {seedanceHasKey
+                ? 'Seedance 2.5'
+                : isSeedanceActive
+                ? 'Seedance (Add Key)'
+                : colabConnected
                 ? `Colab T4 (${colabHealth.vramFreeGb ?? '15'}GB)`
                 : isColabActive
                 ? 'Colab T4 (Connect)'

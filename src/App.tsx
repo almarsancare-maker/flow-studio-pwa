@@ -407,7 +407,11 @@ export default function App() {
       seed: payload.seed,
       engine: engineSettings.activeEngine,
       model:
-        engineSettings.activeEngine === 'colab-t4'
+        engineSettings.activeEngine === 'seedance-byok'
+          ? kind === 'image'
+            ? `Free ${engineSettings.freeImageModel.toUpperCase()} ($0 Keyframe)`
+            : `Seedance (${engineSettings.seedanceResolution})`
+          : engineSettings.activeEngine === 'colab-t4'
           ? kind === 'image'
             ? engineSettings.colabModelImage
             : engineSettings.colabModelVideo
@@ -714,7 +718,9 @@ export default function App() {
           await saveEngineSettings(next);
           setEngineSettings(next);
           showToast(
-            next.activeEngine === 'colab-t4'
+            next.activeEngine === 'seedance-byok'
+              ? 'Switched to Official Seedance 2.5 (BYOK — Keyframes stay $0!)'
+              : next.activeEngine === 'colab-t4'
               ? 'Switched to Free Colab T4 16 GB Engine'
               : 'Switched to Free 24/7 Cloud Engine'
           );

@@ -46,10 +46,12 @@ def main():
         page.get_by_text("Parsed 3 Shots Ready to Queue").wait_for(timeout=5_000)
         page.get_by_role("button", name="Cancel").click()
 
-        print("[4/6] Testing Dual $0 Engine Settings & Colab T4 Notebook Link ...")
+        print("[4/6] Testing 3-Engine Settings (Free Cloud + Colab T4 + Seedance 2.5 BYOK) ...")
         page.get_by_test_id("open-engine-btn").click()
-        page.get_by_text("Engine 1: Free 24/7 Cloud").first.wait_for(timeout=5_000)
-        page.get_by_text("Engine 2: Free Colab T4 16 GB").first.wait_for(timeout=5_000)
+        page.get_by_test_id("select-engine-free").wait_for(timeout=5_000)
+        page.get_by_test_id("select-engine-colab").wait_for(timeout=5_000)
+        page.get_by_test_id("select-engine-seedance").wait_for(timeout=5_000)
+        page.get_by_text("Engine 3: Official ByteDance Seedance").first.wait_for(timeout=5_000)
         nb_href = page.get_by_role("link", name="Download Colab Notebook").get_attribute("href")
         assert nb_href == "/FlowStudio_Colab_T4_Backend.ipynb", f"Bad notebook href: {nb_href}"
         page.get_by_role("button", name="Cancel").click()

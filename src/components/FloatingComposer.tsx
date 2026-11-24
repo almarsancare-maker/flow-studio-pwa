@@ -395,6 +395,8 @@ export function FloatingComposer({
                   <option value={4}>4s clip</option>
                   <option value={5}>5s clip</option>
                   <option value={6}>6s clip</option>
+                  <option value={8}>8s clip (Seedance)</option>
+                  <option value={10}>10s clip (Seedance)</option>
                 </select>
               )}
 
