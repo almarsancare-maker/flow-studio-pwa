@@ -69,10 +69,10 @@ export function TopBar({
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
               <Film className="w-4 h-4 text-zinc-950" />
             </div>
-            <div className="leading-tight">
+            <div className="leading-tight min-w-0">
               <div className="text-xs sm:text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-1.5">
-                <span className="truncate max-w-[125px] sm:max-w-none">Cabardo Studio</span>
-                <span className="text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                <span className="truncate max-w-[105px] sm:max-w-none">Cabardo Studio</span>
+                <span className="hidden sm:inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
                   FREE LIFETIME
                 </span>
               </div>
