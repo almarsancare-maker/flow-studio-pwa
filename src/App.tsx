@@ -687,9 +687,9 @@ export default function App() {
         onExportProjectJson={() => void handleExportProjectJson()}
       />
 
-      {/* Toast Notification */}
+      {/* Toast Notification (Centered non-occluding pill — never covers Search or Filter bars) */}
       {toast && (
-        <div className="fixed top-16 right-4 z-50 px-3.5 py-2 rounded-xl border border-amber-500/40 bg-zinc-950/95 text-xs text-amber-200 shadow-2xl">
+        <div className="fixed top-2.5 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3.5 py-1.5 rounded-full border border-amber-500/40 bg-zinc-950/95 text-xs text-amber-200 shadow-2xl whitespace-nowrap max-w-[92vw] truncate">
           {toast}
         </div>
       )}
@@ -737,39 +737,40 @@ export default function App() {
         />
       </main>
 
-      {/* Fix #3: Storyboard Sequence Timeline & Stitcher */}
-      <StoryboardBar
-        clips={storyboardClips}
-        blobUrls={blobUrls}
-        projectName={activeProject?.name ?? 'flowstudio'}
-        onMoveClip={(id, dir) => void handleMoveStoryboardClip(id, dir)}
-        onReorderClips={(fromId, toId) => void handleReorderStoryboardClips(fromId, toId)}
-        onRemoveClip={(id) => {
-          const target = shots.find((s) => s.id === id);
-          if (target) void updateShotState({ ...target, storyboardOrder: null });
-        }}
-        onExtendFinalClip={(clip) => void handleExtendFinalClip(clip)}
-        onExportComplete={showToast}
-      />
+      {/* Unified Bottom Cinema Dock (Storyboard Cut + Composer — zero overlap on Desktop/Tablet, natural scroll on Mobile) */}
+      <div className="md:sticky md:bottom-0 z-30 pt-2 bg-gradient-to-t from-[#08080a] via-[#08080a]/92 to-transparent">
+        <StoryboardBar
+          clips={storyboardClips}
+          blobUrls={blobUrls}
+          projectName={activeProject?.name ?? 'flowstudio'}
+          onMoveClip={(id, dir) => void handleMoveStoryboardClip(id, dir)}
+          onReorderClips={(fromId, toId) => void handleReorderStoryboardClips(fromId, toId)}
+          onRemoveClip={(id) => {
+            const target = shots.find((s) => s.id === id);
+            if (target) void updateShotState({ ...target, storyboardOrder: null });
+          }}
+          onExtendFinalClip={(clip) => void handleExtendFinalClip(clip)}
+          onExportComplete={showToast}
+        />
 
-      {/* Docked Google Flow Glassmorphic Composer */}
-      <FloatingComposer
-        prompt={prompt}
-        onPromptChange={setPrompt}
-        mode={mode}
-        onModeChange={setMode}
-        aspectRatio={aspectRatio}
-        onAspectRatioChange={setAspectRatio}
-        startFrameDataUrl={startFrameDataUrl}
-        onStartFrameChange={setStartFrameDataUrl}
-        endFrameDataUrl={endFrameDataUrl}
-        onEndFrameChange={setEndFrameDataUrl}
-        remixRecipe={remixRecipe}
-        engineSettings={engineSettings}
-        bibleEntries={bible}
-        queueCount={activeQueueCount}
-        onSubmit={(payload) => void handleQueueSingleShot(payload)}
-      />
+        <FloatingComposer
+          prompt={prompt}
+          onPromptChange={setPrompt}
+          mode={mode}
+          onModeChange={setMode}
+          aspectRatio={aspectRatio}
+          onAspectRatioChange={setAspectRatio}
+          startFrameDataUrl={startFrameDataUrl}
+          onStartFrameChange={setStartFrameDataUrl}
+          endFrameDataUrl={endFrameDataUrl}
+          onEndFrameChange={setEndFrameDataUrl}
+          remixRecipe={remixRecipe}
+          engineSettings={engineSettings}
+          bibleEntries={bible}
+          queueCount={activeQueueCount}
+          onSubmit={(payload) => void handleQueueSingleShot(payload)}
+        />
+      </div>
 
       {/* Drawers & Modals */}
       <BibleDrawer

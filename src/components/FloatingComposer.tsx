@@ -161,7 +161,7 @@ export function FloatingComposer({
   const isSeedanceVideo = mode !== 't2i' && engineSettings.activeEngine === 'seedance-byok';
 
   return (
-    <div className="sticky bottom-0 z-30 pb-3 pt-2 px-3 sm:px-5 pointer-events-none">
+    <div className="pb-3 pt-1 px-3 sm:px-5 pointer-events-none">
       <div className="max-w-4xl mx-auto pointer-events-auto">
         {/* Advanced Recipe Popover (Fix #4: Transparent Seeds, Negative Prompts, Steps, CFG) */}
         {showAdvanced && (
@@ -255,12 +255,12 @@ export function FloatingComposer({
         <div className="rounded-[26px] border border-zinc-800/90 focus-within:border-zinc-600/90 flow-pill p-3 sm:p-3.5 space-y-2.5 transition-colors">
           {/* Top Row: Flow Mode Tabs + Bible @TAG Chips */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="inline-flex rounded-full bg-zinc-950/95 p-0.5 border border-zinc-800/90">
+            <div className="inline-flex rounded-full bg-zinc-950/95 p-0.5 border border-zinc-800/90 max-w-full overflow-x-auto">
               {(
                 [
-                  { id: 't2i', label: 'Keyframe Still', icon: ImageIcon },
-                  { id: 't2v', label: 'Text to Video', icon: Clapperboard },
-                  { id: 'i2v', label: 'Frames to Video', icon: Film },
+                  { id: 't2i', label: 'Keyframe Still', short: 'Still', icon: ImageIcon },
+                  { id: 't2v', label: 'Text to Video', short: 'Text→Vid', icon: Clapperboard },
+                  { id: 'i2v', label: 'Frames to Video', short: 'Frames', icon: Film },
                 ] as const
               ).map((tab) => {
                 const Icon = tab.icon;
@@ -271,14 +271,15 @@ export function FloatingComposer({
                     type="button"
                     data-testid={`mode-tab-${tab.id}`}
                     onClick={() => onModeChange(tab.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition ${
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition ${
                       active
                         ? 'bg-zinc-100 text-zinc-950 shadow-sm'
                         : 'text-zinc-400 hover:text-zinc-100'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{tab.label}</span>
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="sm:hidden">{tab.short}</span>
+                    <span className="hidden sm:inline">{tab.label}</span>
                   </button>
                 );
               })}
