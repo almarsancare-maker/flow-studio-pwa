@@ -1,3 +1,4 @@
+export type FreeImageModel = 'flux' | 'flux-dev' | 'sd35-turbo' | 'turbo';
 export type GenerationMode = 't2i' | 't2v' | 'i2v';
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '21:9';
 export type EngineId = 'free-24-7' | 'colab-t4' | 'gemini-omni' | 'seedance-byok';
@@ -65,6 +66,8 @@ export interface MediaShot {
   omniInteractionId?: string;
   previousOmniInteractionId?: string;
   omniTurnAction?: 'edit' | 'extend';
+  parentShotId?: string;
+  hasSyncedAudio?: boolean;
   storyboardOrder: number | null;
   error?: string;
   createdAt: number;
@@ -76,8 +79,9 @@ export interface EngineSettings {
   colabUrl: string;
   colabModelImage: 'sdxl-turbo' | 'sdxl-base';
   colabModelVideo: 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
-  freeImageModel: 'flux' | 'turbo';
+  freeImageModel: FreeImageModel;
   freeVideoFallback: 'hf-ltx-space' | 'ken-burns-local';
+  freeAutoAudio: boolean;
   geminiApiKey: string;
   omniResolution: OmniResolution;
   seedanceProvider: SeedanceProvider;
@@ -119,6 +123,7 @@ export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   colabModelVideo: 'cogvideox-2b',
   freeImageModel: 'flux',
   freeVideoFallback: 'hf-ltx-space',
+  freeAutoAudio: true,
   geminiApiKey: '',
   omniResolution: '720p',
   seedanceProvider: 'replicate',

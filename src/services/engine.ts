@@ -1,4 +1,4 @@
-import type { EngineSettings, MediaShot } from '../types/studio';
+import type { EngineSettings, FreeImageModel, MediaShot } from '../types/studio';
 import { renderLocalMotionClipFromImage } from '../utils/sequenceStitcher';
 
 export interface ColabHealthStatus {
@@ -30,12 +30,16 @@ export interface GenerationResult {
   seed: number;
   thumbnailDataUrl?: string;
   omniInteractionId?: string;
+  hasSyncedAudio?: boolean;
 }
 
 const HF_FLUX_HOST = 'https://black-forest-labs-flux-1-schnell.hf.space';
+const HF_FLUX_DEV_HOST = 'https://black-forest-labs-flux-1-dev.hf.space';
+const HF_SD35_HOST = 'https://stabilityai-stable-diffusion-3-5-large-turbo.hf.space';
 const HF_LTX_HOST = 'https://lightricks-ltx-video-distilled.hf.space';
 const HF_WAN22_I2V_HOST = 'https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space';
 const HF_WAN22_FLF_HOST = 'https://multimodalart-wan-2-2-first-last-frame.hf.space';
+const HF_MMAUDIO_HOST = 'https://hkchengrex-mmaudio.hf.space';
 
 const WAN_DEFAULT_NEG =
   'worst quality, low quality, blurry, jittery, distorted, static, deformed hands, watermark, text, subtitles';
@@ -119,6 +123,40 @@ async function readGradioSseComplete(
   throw new Error('Gradio SSE closed before completion');
 }
 
+async function uploadBlobToGradio(
+  host: string,
+  blob: Blob,
+  filename: string
+): Promise<{
+  path: string;
+  url: string;
+  orig_name: string;
+  mime_type: string;
+  is_stream: boolean;
+  meta: { _type: string };
+}> {
+  const mimeType = blob.type || 'application/octet-stream';
+  const form = new FormData();
+  form.append('files', blob, filename);
+
+  const upResp = await fetchWithTimeout(
+    `${host}/gradio_api/upload`,
+    { method: 'POST', body: form },
+    25_000
+  );
+  if (!upResp.ok) throw new Error(`Gradio upload HTTP ${upResp.status}`);
+  const paths = (await upResp.json()) as string[];
+  if (!Array.isArray(paths) || !paths[0]) throw new Error('Gradio upload returned no path');
+  return {
+    path: paths[0],
+    url: `${host}/gradio_api/file=${paths[0]}`,
+    orig_name: filename,
+    mime_type: mimeType,
+    is_stream: false,
+    meta: { _type: 'gradio.FileData' },
+  };
+}
+
 async function uploadDataUrlToGradio(
   host: string,
   dataUrl: string,
@@ -133,26 +171,7 @@ async function uploadDataUrlToGradio(
 }> {
   const { blob, mimeType } = dataUrlToBlob(dataUrl);
   const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
-  const filename = `${prefix}.${ext}`;
-  const form = new FormData();
-  form.append('files', blob, filename);
-
-  const upResp = await fetchWithTimeout(
-    `${host}/gradio_api/upload`,
-    { method: 'POST', body: form },
-    20_000
-  );
-  if (!upResp.ok) throw new Error(`Gradio upload HTTP ${upResp.status}`);
-  const paths = (await upResp.json()) as string[];
-  if (!Array.isArray(paths) || !paths[0]) throw new Error('Gradio upload returned no path');
-  return {
-    path: paths[0],
-    url: `${host}/gradio_api/file=${paths[0]}`,
-    orig_name: filename,
-    mime_type: mimeType,
-    is_stream: false,
-    meta: { _type: 'gradio.FileData' },
-  };
+  return uploadBlobToGradio(host, blob, `${prefix}.${ext}`);
 }
 
 function extractGradioVideoUrl(parsed: unknown, host: string): string | null {
@@ -211,6 +230,157 @@ async function generateImageViaDirectHfFlux(
     provider: 'HF FLUX.1-schnell (Direct ZeroGPU)',
     seed: typeof arr[1] === 'number' ? arr[1] : seed,
   };
+}
+
+async function generateImageViaDirectHfFluxDev(
+  prompt: string,
+  width: number,
+  height: number,
+  seed: number,
+  steps = 24
+): Promise<{ blob: Blob; mimeType: string; dataUrl: string; provider: string; seed: number }> {
+  const safeW = Math.max(256, Math.min(1280, Math.round(width / 16) * 16));
+  const safeH = Math.max(256, Math.min(1280, Math.round(height / 16) * 16));
+  const safeSteps = Math.max(16, Math.min(32, Math.round(steps || 24)));
+  const submit = await fetchWithTimeout(
+    `${HF_FLUX_DEV_HOST}/gradio_api/call/infer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [prompt, seed, false, safeW, safeH, 3.5, safeSteps] }),
+    },
+    18_000
+  );
+  if (!submit.ok) throw new Error(`HF FLUX.1-dev submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('HF FLUX.1-dev missing event_id');
+
+  const parsed = await readGradioSseComplete(
+    `${HF_FLUX_DEV_HOST}/gradio_api/call/infer/${eventId}`,
+    55_000
+  );
+  const arr = Array.isArray(parsed) ? parsed : [];
+  const imgObj = arr[0] as { url?: string; path?: string } | undefined;
+  const imgUrl =
+    imgObj?.url || (imgObj?.path ? `${HF_FLUX_DEV_HOST}/gradio_api/file=${imgObj.path}` : null);
+  if (!imgUrl) throw new Error('HF FLUX.1-dev returned no image URL');
+
+  const imgResp = await fetchWithTimeout(imgUrl, {}, 20_000);
+  if (!imgResp.ok) throw new Error(`HF FLUX.1-dev download HTTP ${imgResp.status}`);
+  const blob = await imgResp.blob();
+  if (blob.size < 1024) throw new Error('HF FLUX.1-dev empty image blob');
+  const dataUrl = await blobToDataUrlFast(blob);
+  return {
+    blob,
+    mimeType: blob.type || 'image/webp',
+    dataUrl,
+    provider: 'HF FLUX.1-dev Pro ($0 ZeroGPU)',
+    seed: typeof arr[1] === 'number' ? arr[1] : seed,
+  };
+}
+
+async function generateImageViaDirectHfSd35(
+  prompt: string,
+  negativePrompt: string,
+  width: number,
+  height: number,
+  seed: number
+): Promise<{ blob: Blob; mimeType: string; dataUrl: string; provider: string; seed: number }> {
+  const safeW = Math.max(512, Math.min(1280, Math.round(width / 16) * 16));
+  const safeH = Math.max(512, Math.min(1280, Math.round(height / 16) * 16));
+  const submit = await fetchWithTimeout(
+    `${HF_SD35_HOST}/gradio_api/call/infer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [prompt, negativePrompt || WAN_DEFAULT_NEG, seed, false, safeW, safeH, 1.0, 4],
+      }),
+    },
+    18_000
+  );
+  if (!submit.ok) throw new Error(`HF SD 3.5 submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('HF SD 3.5 missing event_id');
+
+  const parsed = await readGradioSseComplete(
+    `${HF_SD35_HOST}/gradio_api/call/infer/${eventId}`,
+    40_000
+  );
+  const arr = Array.isArray(parsed) ? parsed : [];
+  const imgObj = arr[0] as { url?: string; path?: string } | undefined;
+  const imgUrl =
+    imgObj?.url || (imgObj?.path ? `${HF_SD35_HOST}/gradio_api/file=${imgObj.path}` : null);
+  if (!imgUrl) throw new Error('HF SD 3.5 returned no image URL');
+
+  const imgResp = await fetchWithTimeout(imgUrl, {}, 20_000);
+  if (!imgResp.ok) throw new Error(`HF SD 3.5 download HTTP ${imgResp.status}`);
+  const blob = await imgResp.blob();
+  if (blob.size < 1024) throw new Error('HF SD 3.5 empty image blob');
+  const dataUrl = await blobToDataUrlFast(blob);
+  return {
+    blob,
+    mimeType: blob.type || 'image/webp',
+    dataUrl,
+    provider: 'HF SD 3.5 Large Turbo ($0 ZeroGPU)',
+    seed: typeof arr[1] === 'number' ? arr[1] : seed,
+  };
+}
+
+/**
+ * $0 Synchronized AI Video-to-Audio Foley & Sound Design powered by open-weight
+ * MMAudio on Hugging Face ZeroGPU (CORS-enabled direct from browser).
+ * Analyzes actual video frames + prompt and returns an MP4 muxed with synced audio.
+ */
+export async function synthesizeSyncedVideoAudio(
+  videoBlob: Blob,
+  prompt: string,
+  durationSec = 5,
+  seed = -1,
+  onProgress?: (pct: number, phase: string) => void
+): Promise<{ blob: Blob; mimeType: string }> {
+  onProgress?.(92, 'Uploading clip to Free MMAudio ($0 Synced AI Foley)...');
+  const ext = (videoBlob.type || '').includes('webm') ? 'webm' : 'mp4';
+  const uploadedVid = await uploadBlobToGradio(HF_MMAUDIO_HOST, videoBlob, `clip.${ext}`);
+
+  const dur = Math.max(2, Math.min(10, Number(durationSec) || 5));
+  onProgress?.(95, 'Synthesizing frame-synced AI Foley & ambience ($0 MMAudio)...');
+  const submit = await fetchWithTimeout(
+    `${HF_MMAUDIO_HOST}/gradio_api/call/video_to_audio`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [
+          uploadedVid,
+          `${prompt}, crisp realistic cinematic sound effects, atmospheric room tone, synced foley`,
+          'distortion, harsh static, clipping, low quality',
+          seed,
+          25,
+          4.5,
+          dur,
+        ],
+      }),
+    },
+    20_000
+  );
+  if (!submit.ok) throw new Error(`MMAudio submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('MMAudio missing event_id');
+
+  const parsed = await readGradioSseComplete(
+    `${HF_MMAUDIO_HOST}/gradio_api/call/video_to_audio/${eventId}`,
+    50_000
+  );
+  const outUrl = extractGradioVideoUrl(parsed, HF_MMAUDIO_HOST);
+  if (!outUrl) throw new Error('MMAudio completed without output video URL');
+
+  onProgress?.(98, 'Downloading audio-synced MP4 into IndexedDB Vault...');
+  const resp = await fetchWithTimeout(outUrl, {}, 25_000);
+  if (!resp.ok) throw new Error(`MMAudio download HTTP ${resp.status}`);
+  const outBlob = await resp.blob();
+  if (outBlob.size < 4096) throw new Error('MMAudio returned empty video blob');
+  return { blob: outBlob, mimeType: outBlob.type || 'video/mp4' };
 }
 
 async function generateImageViaDirectPollinations(
@@ -277,12 +447,41 @@ async function generateFreeImageCascade(
   width: number,
   height: number,
   seed: number,
-  model: 'flux' | 'turbo',
-  onProgress: (pct: number, phase: string) => void
+  model: FreeImageModel,
+  onProgress: (pct: number, phase: string) => void,
+  negativePrompt = '',
+  steps = 24
 ): Promise<{ dataUrl: string; blob: Blob; mimeType: string; provider: string; seed: number }> {
   const errors: string[] = [];
+  const pollFallbackModel: 'flux' | 'turbo' = model === 'turbo' ? 'turbo' : 'flux';
 
-  if (model === 'turbo') {
+  if (model === 'flux-dev') {
+    try {
+      onProgress(22, 'Rendering Cinema Pro still via HF FLUX.1-dev ($0 ZeroGPU)...');
+      return await generateImageViaDirectHfFluxDev(prompt, width, height, seed, steps);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : 'HF FLUX.1-dev failed');
+    }
+    try {
+      onProgress(52, 'Switching to HF FLUX.1-schnell ZeroGPU...');
+      return await generateImageViaDirectHfFlux(prompt, width, height, seed);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
+    }
+  } else if (model === 'sd35-turbo') {
+    try {
+      onProgress(22, 'Rendering HD still via Stability SD 3.5 Large Turbo ($0 ZeroGPU)...');
+      return await generateImageViaDirectHfSd35(prompt, negativePrompt, width, height, seed);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : 'HF SD 3.5 failed');
+    }
+    try {
+      onProgress(52, 'Switching to HF FLUX.1-schnell ZeroGPU...');
+      return await generateImageViaDirectHfFlux(prompt, width, height, seed);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
+    }
+  } else if (model === 'turbo') {
     try {
       onProgress(25, 'Rendering fast keyframe via Pollinations Turbo...');
       return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
@@ -311,8 +510,15 @@ async function generateFreeImageCascade(
   }
 
   try {
-    onProgress(78, 'Trying Vercel /api/image backup relay...');
-    return await generateImageViaServerApi(prompt, width, height, seed, model);
+    onProgress(70, 'Switching to Pollinations FLUX backup...');
+    return await generateImageViaDirectPollinations(prompt, width, height, seed, pollFallbackModel);
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : 'Pollinations backup failed');
+  }
+
+  try {
+    onProgress(82, 'Trying Vercel /api/image backup relay...');
+    return await generateImageViaServerApi(prompt, width, height, seed, pollFallbackModel);
   } catch (e) {
     errors.push(e instanceof Error ? e.message : 'Server API failed');
   }
@@ -675,7 +881,9 @@ export async function runImageGeneration(
     shot.height,
     shot.seed,
     settings.freeImageModel,
-    onProgress
+    onProgress,
+    shot.negativePrompt,
+    shot.steps
   );
   onProgress(96, 'Caching permanently in IndexedDB Vault...');
   return {
@@ -959,7 +1167,32 @@ export async function runVideoGeneration(
     throw new Error('Colab T4 video render timed out after 9 minutes.');
   }
 
-  // Engine 1: Multi-Space $0 AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video -> Director Cinema Motion)
+  const attachFreeSyncedAudioIfEnabled = async (
+    base: GenerationResult
+  ): Promise<GenerationResult> => {
+    if (!settings.freeAutoAudio) return base;
+    try {
+      const synced = await synthesizeSyncedVideoAudio(
+        base.blob,
+        shot.rawPrompt || shot.compiledPrompt,
+        shot.durationSec,
+        base.seed,
+        onProgress
+      );
+      return {
+        ...base,
+        blob: synced.blob,
+        mimeType: synced.mimeType,
+        providerLabel: `${base.providerLabel} + MMAudio Foley`,
+        hasSyncedAudio: true,
+      };
+    } catch {
+      // Never fail a completed video if MMAudio ZeroGPU queue is busy; user can still click Sync Foley in Lightbox
+      return base;
+    }
+  };
+
+  // Engine 1: Multi-Space $0 AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video -> Director Cinema Motion) + Free MMAudio Synced Foley
   let keyframeDataUrl = shot.startFrameDataUrl;
   let actualSeed = shot.seed;
 
@@ -967,12 +1200,13 @@ export async function runVideoGeneration(
     // Path A: Both Start Frame & End Frame provided -> Free Wan 2.2 14B First-to-Last Frame Morph!
     if (keyframeDataUrl && shot.endFrameDataUrl) {
       try {
-        return await generateVideoViaWan22FirstLastFrame(
+        const res = await generateVideoViaWan22FirstLastFrame(
           shot,
           keyframeDataUrl,
           shot.endFrameDataUrl,
           onProgress
         );
+        return await attachFreeSyncedAudioIfEnabled(res);
       } catch {
         // Fall through to Wan 2.2 FP8 single-frame
       }
@@ -988,7 +1222,9 @@ export async function runVideoGeneration(
           shot.width >= shot.height ? 576 : 1024,
           shot.seed,
           settings.freeImageModel,
-          onProgress
+          onProgress,
+          shot.negativePrompt,
+          shot.steps
         );
         keyframeDataUrl = still.dataUrl;
         actualSeed = still.seed;
@@ -999,14 +1235,16 @@ export async function runVideoGeneration(
 
     if (keyframeDataUrl) {
       try {
-        return await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress);
+        const res = await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress);
+        return await attachFreeSyncedAudioIfEnabled(res);
       } catch {
         // Cascade to HF LTX-Video Distilled
       }
     }
 
     try {
-      return await generateVideoViaDirectHfLtx(shot, onProgress);
+      const res = await generateVideoViaDirectHfLtx(shot, onProgress);
+      return await attachFreeSyncedAudioIfEnabled(res);
     } catch {
       // Guaranteed zero-wait fallback below
     }
@@ -1021,7 +1259,9 @@ export async function runVideoGeneration(
       shot.width >= shot.height ? 576 : 1024,
       shot.seed,
       settings.freeImageModel,
-      onProgress
+      onProgress,
+      shot.negativePrompt,
+      shot.steps
     );
     keyframeDataUrl = still.dataUrl;
     actualSeed = still.seed;
@@ -1036,12 +1276,12 @@ export async function runVideoGeneration(
     shot.rawPrompt,
     shot.endFrameDataUrl
   );
-  onProgress(98, 'Saving video clip into IndexedDB Vault...');
-  return {
+  onProgress(90, 'Saving video clip into IndexedDB Vault...');
+  return await attachFreeSyncedAudioIfEnabled({
     blob: motionBlob,
     mimeType: motionBlob.type || 'video/webm',
     providerLabel: 'Director Cinema Motion ($0 Fallback · ZeroGPU Busy)',
     seed: actualSeed,
     thumbnailDataUrl: keyframeDataUrl,
-  };
+  });
 }
