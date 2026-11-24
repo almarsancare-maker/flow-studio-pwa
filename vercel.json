@@ -2,9 +2,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|manifest\\.webmanifest|sw\\.js|workbox-.*|icon\\.svg).*)",
+      "source": "/((?!api/|assets/|manifest\\.webmanifest|sw\\.js|registerSW\\.js|workbox-.*|icon\\.svg|FlowStudio_Colab_T4_Backend\\.ipynb).*)",
       "destination": "/index.html"
     }
   ]
