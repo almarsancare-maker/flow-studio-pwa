@@ -202,7 +202,7 @@ async function generateImageViaDirectHfFlux(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: [prompt, seed, false, safeW, safeH, 4] }),
     },
-    15_000
+    10_000
   );
   if (!submit.ok) throw new Error(`HF FLUX submit HTTP ${submit.status}`);
   const { event_id: eventId } = (await submit.json()) as { event_id?: string };
@@ -210,7 +210,7 @@ async function generateImageViaDirectHfFlux(
 
   const parsed = await readGradioSseComplete(
     `${HF_FLUX_HOST}/gradio_api/call/infer/${eventId}`,
-    35_000
+    16_000
   );
   const arr = Array.isArray(parsed) ? parsed : [];
   const imgObj = arr[0] as { url?: string; path?: string } | undefined;
@@ -454,6 +454,7 @@ async function generateFreeImageCascade(
 ): Promise<{ dataUrl: string; blob: Blob; mimeType: string; provider: string; seed: number }> {
   const errors: string[] = [];
   const pollFallbackModel: 'flux' | 'turbo' = model === 'turbo' ? 'turbo' : 'flux';
+  let triedPollinations = false;
 
   if (model === 'flux-dev') {
     try {
@@ -482,6 +483,7 @@ async function generateFreeImageCascade(
       errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
     }
   } else if (model === 'turbo') {
+    triedPollinations = true;
     try {
       onProgress(25, 'Rendering fast keyframe via Pollinations Turbo...');
       return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
@@ -501,6 +503,7 @@ async function generateFreeImageCascade(
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
     }
+    triedPollinations = true;
     try {
       onProgress(55, 'Switching to Pollinations FLUX...');
       return await generateImageViaDirectPollinations(prompt, width, height, seed, 'flux');
@@ -509,16 +512,18 @@ async function generateFreeImageCascade(
     }
   }
 
-  try {
-    onProgress(70, 'Switching to Pollinations FLUX backup...');
-    return await generateImageViaDirectPollinations(prompt, width, height, seed, pollFallbackModel);
-  } catch (e) {
-    errors.push(e instanceof Error ? e.message : 'Pollinations backup failed');
+  if (!triedPollinations) {
+    try {
+      onProgress(70, 'Switching to Pollinations FLUX backup...');
+      return await generateImageViaDirectPollinations(prompt, width, height, seed, pollFallbackModel);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : 'Pollinations backup failed');
+    }
   }
 
   try {
-    onProgress(82, 'Trying Vercel /api/image backup relay...');
-    return await generateImageViaServerApi(prompt, width, height, seed, pollFallbackModel);
+    onProgress(84, 'Trying Vercel /api/image backup relay...');
+    return await generateImageViaServerApi(prompt, width, height, seed, 'turbo');
   } catch (e) {
     errors.push(e instanceof Error ? e.message : 'Server API failed');
   }
