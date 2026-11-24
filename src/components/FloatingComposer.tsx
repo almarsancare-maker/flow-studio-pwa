@@ -62,6 +62,7 @@ interface FloatingComposerProps {
   bibleEntries: BibleEntry[];
   queueCount: number;
   onSubmit: (payload: ComposerSubmitPayload) => void;
+  onOpenEngine: () => void;
 }
 
 const CAMERA_PRESETS = [
@@ -99,6 +100,7 @@ export function FloatingComposer({
   bibleEntries,
   queueCount,
   onSubmit,
+  onOpenEngine,
 }: FloatingComposerProps) {
   const [durationSec, setDurationSec] = useState(5);
   const [negativePrompt, setNegativePrompt] = useState(
@@ -213,6 +215,12 @@ export function FloatingComposer({
 
   const isOmniVideo = mode !== 't2i' && engineSettings.activeEngine === 'gemini-omni';
   const isSeedanceVideo = mode !== 't2i' && engineSettings.activeEngine === 'seedance-byok';
+  const needsVideoSetup =
+    mode !== 't2i' &&
+    ((engineSettings.activeEngine === 'free-24-7' &&
+      engineSettings.freeVideoFallback === 'hf-ltx-space' &&
+      !engineSettings.hfToken.trim()) ||
+      (engineSettings.activeEngine === 'colab-t4' && !engineSettings.colabUrl.trim()));
 
   return (
     <div className="pb-4 pt-1 px-4 sm:px-6 pointer-events-none">
@@ -547,14 +555,38 @@ export function FloatingComposer({
             </div>
           )}
 
+          {/* Honest Pre-Flight Notice when Video GPU is not yet connected */}
+          {needsVideoSetup && (
+            <div
+              data-testid="video-gpu-notice"
+              className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-[14px] bg-[#f59e0b]/10 border border-[#f59e0b]/35 text-[12px] text-white/90"
+            >
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#f59e0b] shrink-0" />
+                <span>
+                  Real AI video needs a <strong className="font-medium text-white">Free HF Token ($0)</strong>,{' '}
+                  <strong className="font-medium text-white">Free Colab T4</strong>, or cloud API key.
+                </span>
+              </span>
+              <button
+                type="button"
+                data-testid="composer-setup-gpu-btn"
+                onClick={onOpenEngine}
+                className="flow-cta-primary px-3 py-1 text-[11px] cursor-pointer shrink-0"
+              >
+                Connect Video GPU
+              </button>
+            </div>
+          )}
+
           {/* Bottom Controls Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-white/15">
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 pt-2.5 border-t border-white/15">
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
               <select
                 aria-label="Aspect ratio"
                 value={aspectRatio}
                 onChange={(e) => onAspectRatioChange(e.target.value as AspectRatio)}
-                className="flow-select-pill h-9 px-3 text-[12px] font-medium cursor-pointer"
+                className="flow-select-pill h-9 px-2.5 text-[12px] font-medium cursor-pointer"
               >
                 <option value="16:9">16:9 Cinema</option>
                 <option value="9:16">9:16 Reels</option>
@@ -567,8 +599,8 @@ export function FloatingComposer({
                 data-testid="take-count-select"
                 value={takeCount}
                 onChange={(e) => setTakeCount(Number(e.target.value) as 1 | 2 | 4)}
-                title="Generate multiple seed variations in one click ($0)"
-                className="flow-select-pill h-9 px-3 text-[12px] font-medium cursor-pointer"
+                title="Generate multiple seed variations in one click"
+                className="flow-select-pill h-9 px-2.5 text-[12px] font-medium cursor-pointer"
               >
                 <option value={1}>1× Take</option>
                 <option value={2}>2× Takes</option>
@@ -580,7 +612,7 @@ export function FloatingComposer({
                   aria-label="Duration"
                   value={durationSec}
                   onChange={(e) => setDurationSec(Number(e.target.value))}
-                  className="flow-select-pill h-9 px-3 text-[12px] font-medium cursor-pointer"
+                  className="flow-select-pill h-9 px-2.5 text-[12px] font-medium cursor-pointer"
                 >
                   <option value={3}>3s</option>
                   <option value={4}>4s</option>
@@ -598,8 +630,8 @@ export function FloatingComposer({
                 data-testid="magic-enhance-btn"
                 disabled={!prompt.trim() || enhancing}
                 onClick={() => void handleEnhance()}
-                title="Expand your prompt into 35mm cinematography while keeping @TAGs intact ($0)"
-                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium disabled:opacity-40 cursor-pointer"
+                title="Expand your prompt into 35mm cinematography while keeping @TAGs intact"
+                className="flow-btn-glass h-9 px-2.5 flex items-center gap-1.5 text-[12px] font-medium disabled:opacity-40 cursor-pointer"
               >
                 {enhancing ? (
                   <Loader2 className="w-3.5 h-3.5 stroke-[1.6] animate-spin" />
@@ -614,7 +646,7 @@ export function FloatingComposer({
                 data-testid="toggle-style-presets-btn"
                 data-active={showStyleBar ? 'true' : 'false'}
                 onClick={() => setShowStyleBar((v) => !v)}
-                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
+                className="flow-btn-glass h-9 px-2.5 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
               >
                 <Palette className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Look</span>
@@ -625,7 +657,7 @@ export function FloatingComposer({
                 data-testid="toggle-camera-presets-btn"
                 data-active={showCameraBar ? 'true' : 'false'}
                 onClick={() => setShowCameraBar((v) => !v)}
-                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
+                className="flow-btn-glass h-9 px-2.5 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
               >
                 <Camera className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Camera</span>
@@ -636,7 +668,7 @@ export function FloatingComposer({
                 data-testid="toggle-recipe-btn"
                 data-active={showAdvanced || seedLocked ? 'true' : 'false'}
                 onClick={() => setShowAdvanced((v) => !v)}
-                className="flow-btn-glass h-9 px-3 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
+                className="flow-btn-glass h-9 px-2.5 flex items-center gap-1.5 text-[12px] font-medium cursor-pointer"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 stroke-[1.6]" />
                 <span>Recipe</span>
@@ -644,22 +676,23 @@ export function FloatingComposer({
               </button>
 
               {mode !== 't2i' &&
+                !needsVideoSetup &&
                 (engineSettings.activeEngine === 'free-24-7' && engineSettings.freeAutoAudio ? (
-                  <span className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 text-[12px] rounded-[32px] bg-white/5 border border-white/15 text-white/80">
+                  <span className="hidden xl:inline-flex items-center gap-1.5 h-9 px-2.5 text-[11px] rounded-[32px] bg-white/5 border border-white/15 text-white/80 whitespace-nowrap">
                     <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-[#29c58f]" />
-                    AI Foley ($0)
+                    Foley ON
                   </span>
                 ) : isOmniVideo || (isSeedanceVideo && engineSettings.seedanceAudio) ? (
-                  <span className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 text-[12px] rounded-[32px] bg-white/5 border border-white/15 text-white/80">
+                  <span className="hidden xl:inline-flex items-center gap-1.5 h-9 px-2.5 text-[11px] rounded-[32px] bg-white/5 border border-white/15 text-white/80 whitespace-nowrap">
                     <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-[#c2e7ff]" />
                     Audio ON
                   </span>
                 ) : null)}
             </div>
 
-            <div className="flex items-center gap-2.5 ml-auto">
+            <div className="flex items-center gap-2 ml-auto shrink-0">
               {queueCount > 0 && (
-                <span className="text-[12px] text-white/75 animate-pulse">
+                <span className="text-[12px] text-white/75 animate-pulse whitespace-nowrap">
                   {queueCount} active...
                 </span>
               )}
@@ -668,7 +701,7 @@ export function FloatingComposer({
                 data-testid="composer-submit-btn"
                 disabled={!prompt.trim()}
                 onClick={handleQueue}
-                className="flow-cta-primary h-12 px-6 flex items-center gap-2 text-[14px] disabled:opacity-65 cursor-pointer whitespace-nowrap"
+                className="flow-cta-primary h-10 px-5 flex items-center gap-2 text-[13px] disabled:opacity-65 cursor-pointer whitespace-nowrap"
               >
                 <span>
                   {mode === 't2i'

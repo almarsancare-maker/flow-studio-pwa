@@ -90,6 +90,8 @@ export function TopBar({
   const isOmniActive = engineSettings.activeEngine === 'gemini-omni';
   const isSeedanceActive = engineSettings.activeEngine === 'seedance-byok';
   const colabConnected = isColabActive && colabHealth?.online;
+  const hfTokenReady =
+    engineSettings.activeEngine === 'free-24-7' && engineSettings.hfToken.trim().length > 0;
   const omniHasKey =
     isOmniActive && (engineSettings.geminiApiKey.trim().length > 0 || serverKeys.gemini);
   const hasServerSeedance =
@@ -100,24 +102,26 @@ export function TopBar({
   const engineLabel = omniHasKey
     ? `Omni 1.2 (${engineSettings.omniResolution})`
     : isOmniActive
-    ? 'Omni 1.2'
+    ? 'Omni 1.2 (No Key)'
     : seedanceHasKey
     ? 'Seedance 2.5'
     : isSeedanceActive
-    ? 'Seedance'
+    ? 'Seedance (No Key)'
     : colabConnected
     ? `Colab T4 (${colabHealth.vramFreeGb ?? '15'}GB)`
     : isColabActive
-    ? 'Colab T4'
-    : 'Free Cloud';
+    ? 'Colab T4 (Offline)'
+    : hfTokenReady
+    ? 'HF ZeroGPU'
+    : 'Setup Video GPU';
 
   const statusDotColor = omniHasKey
     ? 'bg-[#c2e7ff]'
     : seedanceHasKey
     ? 'bg-[#9e9eff]'
-    : colabConnected || !isColabActive
+    : colabConnected || hfTokenReady
     ? 'bg-[#29c58f]'
-    : 'bg-white/40';
+    : 'bg-[#f59e0b]';
 
   return (
     <header

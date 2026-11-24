@@ -502,76 +502,46 @@ async function generateFreeImageCascade(
   hfToken?: string
 ): Promise<{ dataUrl: string; blob: Blob; mimeType: string; provider: string; seed: number }> {
   const errors: string[] = [];
-  const pollFallbackModel: 'flux' | 'turbo' = model === 'turbo' ? 'turbo' : 'flux';
-  let triedPollinations = false;
+  const hasHf = Boolean(hfToken && hfToken.trim().length > 0);
 
-  if (model === 'flux-dev') {
-    try {
-      onProgress(22, 'Rendering Cinema Pro still via HF FLUX.1-dev ($0 ZeroGPU)...');
-      return await generateImageViaDirectHfFluxDev(prompt, width, height, seed, steps, hfToken);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'HF FLUX.1-dev failed');
+  // Only hit HF ZeroGPU image Spaces when the user has a Free HF token (anonymous ZeroGPU rejects immediately)
+  if (hasHf) {
+    if (model === 'flux-dev') {
+      try {
+        onProgress(22, 'Rendering Cinema Pro still via HF FLUX.1-dev (ZeroGPU)...');
+        return await generateImageViaDirectHfFluxDev(prompt, width, height, seed, steps, hfToken);
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : 'HF FLUX.1-dev failed');
+      }
+    } else if (model === 'sd35-turbo') {
+      try {
+        onProgress(22, 'Rendering HD still via Stability SD 3.5 Large Turbo (ZeroGPU)...');
+        return await generateImageViaDirectHfSd35(prompt, negativePrompt, width, height, seed, hfToken);
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : 'HF SD 3.5 failed');
+      }
     }
-    try {
-      onProgress(52, 'Switching to HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
-    }
-  } else if (model === 'sd35-turbo') {
-    try {
-      onProgress(22, 'Rendering HD still via Stability SD 3.5 Large Turbo ($0 ZeroGPU)...');
-      return await generateImageViaDirectHfSd35(prompt, negativePrompt, width, height, seed, hfToken);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'HF SD 3.5 failed');
-    }
-    try {
-      onProgress(52, 'Switching to HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'HF FLUX.1-schnell failed');
-    }
-  } else if (model === 'turbo') {
-    triedPollinations = true;
-    try {
-      onProgress(25, 'Rendering fast keyframe via Pollinations Turbo...');
-      return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'Pollinations turbo failed');
-    }
-    try {
-      onProgress(55, 'Switching to HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
-    }
-  } else {
-    try {
-      onProgress(25, 'Rendering HD keyframe via HF FLUX.1-schnell ZeroGPU...');
-      return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
-    }
-    triedPollinations = true;
-    try {
-      onProgress(55, 'Switching to Pollinations FLUX...');
-      return await generateImageViaDirectPollinations(prompt, width, height, seed, 'flux');
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'Pollinations flux failed');
+
+    if (model !== 'turbo') {
+      try {
+        onProgress(35, 'Rendering HD keyframe via HF FLUX.1-schnell (ZeroGPU)...');
+        return await generateImageViaDirectHfFlux(prompt, width, height, seed, hfToken);
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
+      }
     }
   }
 
-  if (!triedPollinations) {
-    try {
-      onProgress(70, 'Switching to Pollinations FLUX backup...');
-      return await generateImageViaDirectPollinations(prompt, width, height, seed, pollFallbackModel);
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : 'Pollinations backup failed');
-    }
+  // Fast direct $0 still path (skips paywalled Pollinations flux 402 & blocked anonymous ZeroGPU)
+  try {
+    onProgress(35, 'Rendering keyframe via Pollinations Turbo ($0)...');
+    return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : 'Pollinations turbo failed');
   }
 
   try {
-    onProgress(84, 'Trying Vercel /api/image backup relay...');
+    onProgress(75, 'Trying Vercel /api/image relay...');
     return await generateImageViaServerApi(prompt, width, height, seed, 'turbo');
   } catch (e) {
     errors.push(e instanceof Error ? e.message : 'Server API failed');
@@ -658,7 +628,7 @@ async function generateVideoViaWan22Fast(
   const imgFile = await uploadDataUrlToGradio(HF_WAN22_I2V_HOST, keyframeDataUrl, 'start', hfToken);
   const dur = Math.max(2.0, Math.min(5.0, shot.durationSec || 3.5));
 
-  onProgress(40, 'Diffusing Wan 2.2 14B FP8 6-step video ($0 ZeroGPU)...');
+  onProgress(40, 'Diffusing Wan 2.2 14B FP8 4-step video (ZeroGPU)...');
   const submit = await fetchWithTimeout(
     `${HF_WAN22_I2V_HOST}/gradio_api/call/generate_video`,
     {
@@ -668,7 +638,7 @@ async function generateVideoViaWan22Fast(
         data: [
           imgFile,
           shot.compiledPrompt,
-          6,
+          4,
           shot.negativePrompt || WAN_DEFAULT_NEG,
           dur,
           1,
@@ -1264,6 +1234,13 @@ export async function runVideoGeneration(
   const videoErrors: string[] = [];
 
   if (settings.freeVideoFallback === 'hf-ltx-space') {
+    // Fail fast (<50ms) when unauthenticated: anonymous HF ZeroGPU always rejects video calls.
+    if (!hfToken) {
+      throw new Error(
+        'Video GPU not connected. Click "Setup Free GPU" to paste a free HF token (hf_...) or launch Free Colab T4 16 GB.'
+      );
+    }
+
     if (keyframeDataUrl && shot.endFrameDataUrl) {
       try {
         const res = await generateVideoViaWan22FirstLastFrame(
@@ -1281,17 +1258,18 @@ export async function runVideoGeneration(
 
     if (!keyframeDataUrl) {
       try {
-        onProgress(14, 'Stage 1/2: Generating $0 HD keyframe for Wan 2.2 14B...');
+        // Reserve 100% of user's ZeroGPU quota for video diffusion by generating Stage-1 still off-ZeroGPU
+        onProgress(14, 'Stage 1/2: Generating keyframe still for Wan 2.2 14B...');
         const still = await generateFreeImageCascade(
           shot.compiledPrompt,
           shot.width >= shot.height ? 1024 : 576,
           shot.width >= shot.height ? 576 : 1024,
           shot.seed,
-          settings.freeImageModel,
+          'turbo',
           onProgress,
           shot.negativePrompt,
           shot.steps,
-          hfToken
+          undefined
         );
         keyframeDataUrl = still.dataUrl;
         actualSeed = still.seed;
@@ -1317,10 +1295,9 @@ export async function runVideoGeneration(
     }
 
     // NEVER silently substitute a fake static-image Ken Burns zoom!
-    const authHint = hfToken
-      ? 'Your Hugging Face ZeroGPU daily quota is currently busy. Click "Setup Free GPU" to connect 1-Click Free Google Colab T4 16 GB for unlimited real LTX-0.9.7 video + audio.'
-      : 'Hugging Face ZeroGPU blocked anonymous video rendering (quota exceeded). Click "Setup Free GPU" to either paste a FREE $0 Hugging Face token (hf_...) OR launch 1-Click Free Google Colab T4 16 GB for real AI video + audio.';
-    throw new Error(`${authHint} [${videoErrors[videoErrors.length - 1] || 'ZeroGPU unavailable'}]`);
+    throw new Error(
+      `HF ZeroGPU daily quota busy or exhausted. Click "Setup Free GPU" to switch to Free Colab T4 16 GB. [${videoErrors[videoErrors.length - 1] || 'ZeroGPU unavailable'}]`
+    );
   }
 
   // Explicit opt-in only: Browser Keyframe Motion (when user selects ken-burns-local in Engine Settings)

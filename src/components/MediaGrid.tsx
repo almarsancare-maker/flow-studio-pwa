@@ -43,21 +43,21 @@ type FilterKind = 'all' | 'video' | 'image' | 'cut';
 const STARTER_CARDS: { title: string; tag: string; mode: GenerationMode; prompt: string }[] = [
   {
     title: 'Keyframe Still',
-    tag: 'FLUX · @MIRA + @LOC-D · $0',
+    tag: 'Instant Still · @MIRA + @LOC-D',
     mode: 't2i',
     prompt:
       'Medium close-up of @MIRA sketching by a rain-streaked window inside @LOC-D, warm tungsten lamp, 35mm cinema still',
   },
   {
     title: 'Cinematic Video + Audio',
-    tag: 'Text to Video · Synced SFX',
+    tag: 'Video · Requires Free HF Token or Colab T4',
     mode: 't2v',
     prompt:
       'Slow cinematic dolly-in on @MIRA looking out the rain-streaked window inside @LOC-D, soft distant thunder and rain patter, 35mm film',
   },
   {
     title: 'Anamorphic Establishing Shot',
-    tag: '21:9 Cinema Frame · $0',
+    tag: '21:9 Still · Instant',
     mode: 't2i',
     prompt:
       'Wide establishing shot of neon-lit Manila alley after tropical rain, wet asphalt reflections, anamorphic lens flare, moody cinema',
@@ -114,21 +114,21 @@ export function MediaGrid({
     return (
       <section className="flex-1 flex flex-col items-center justify-center px-6 py-10 sm:py-16 text-center max-w-[1200px] mx-auto w-full">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-[32px] bg-white/5 border border-white/15 text-[12px] font-medium text-white/75 mb-6 whitespace-nowrap">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#29c58f] shrink-0" />
+          <span className="w-1.5 h-1.5 rounded-full bg-white/75 shrink-0" />
           <span>
-            $0 Forever Open-Weight Cinema
-            <span className="hidden sm:inline"> · Character Bible · Storyboard Cut</span>
+            Keyframe Stills · AI Video · Storyboard Cut
+            <span className="hidden sm:inline"> · Local IndexedDB Vault</span>
           </span>
         </div>
 
         <h1 className="text-[38px] sm:text-[56px] lg:text-[72px] font-medium tracking-[-0.04em] leading-[1.02] text-white max-w-4xl">
-          Create cinema without limits
+          Direct stills and AI video
         </h1>
 
         <p className="text-[16px] leading-[24px] text-white/75 max-w-2xl mt-5">
-          Direct keyframes, video continuity, and synced sound in one studio—powered by locked{' '}
-          <span className="font-mono text-white">@TAG</span> character memory, first-to-last frame
-          morphing, offline vault storage, and zero-cost open-weight engines.
+          Generate instant keyframes with locked{' '}
+          <span className="font-mono text-white">@TAG</span> character memory, or connect a free
+          Hugging Face token, Google Colab T4 GPU, or cloud API key for real AI video and audio.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 w-full">
@@ -333,13 +333,13 @@ export function MediaGrid({
                       </>
                     )
                   ) : shot.status === 'failed' ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#b22f25]/15">
-                      <AlertCircle className="w-6 h-6 stroke-[1.5] text-[#fe6e6e] mb-1.5" />
-                      <p className="text-[13px] font-medium text-white">Render Failed</p>
-                      <p className="text-[11px] text-[#fe6e6e] mt-1 line-clamp-3 leading-[16px]">
+                    <div className="w-full h-full flex flex-col items-center justify-center p-3.5 text-center bg-[#b22f25]/15 overflow-y-auto">
+                      <AlertCircle className="w-5 h-5 stroke-[1.5] text-[#fe6e6e] mb-1 shrink-0" />
+                      <p className="text-[12px] font-medium text-white">Render Failed</p>
+                      <p className="text-[11px] text-[#fe6e6e] mt-1 leading-[15px] max-w-[95%]">
                         {shot.error}
                       </p>
-                      <div className="mt-2.5 flex items-center gap-1.5">
+                      <div className="mt-2.5 flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={(e) => {

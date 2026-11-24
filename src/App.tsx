@@ -969,6 +969,7 @@ export default function App() {
           bibleEntries={bible}
           queueCount={activeQueueCount}
           onSubmit={(payload) => void handleQueueSingleShot(payload)}
+          onOpenEngine={() => setEngineOpen(true)}
         />
       </div>
 

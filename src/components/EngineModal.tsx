@@ -114,6 +114,9 @@ export function EngineModal({
     try {
       const result = await verifyHfToken(draft.hfToken);
       setHfStatus(result);
+      if (result.valid) {
+        setDraft((prev) => ({ ...prev, activeEngine: 'free-24-7' }));
+      }
     } finally {
       setTestingHf(false);
     }
@@ -187,11 +190,11 @@ export function EngineModal({
           <div>
             <h2 className="text-[16px] font-medium text-white flex items-center gap-2 tracking-[-0.01em]">
               <Cpu className="w-4 h-4 stroke-[1.6] text-white" />
-              Cabardo Studio Compute — 100% Free Forever ($0 Default)
+              Cabardo Studio Compute — Video &amp; Image Backends
             </h2>
             <p className="text-[13px] text-white/55 mt-1 leading-[19px]">
-              Zero credit card or API key required. Run open-weight FLUX.1-dev, SD 3.5 Large, Wan
-              2.2 14B, LTX-Video &amp; Synced AI Foley (MMAudio) for $0 forever.
+              Stills run instantly ($0). Real AI video requires one compute backend below: a free
+              Hugging Face Read token, Free Google Colab T4 GPU, or an optional paid cloud API key.
             </p>
           </div>
           <button
@@ -205,30 +208,29 @@ export function EngineModal({
         </div>
 
         <div className="p-6 overflow-y-auto space-y-4">
-          {/* Primary Hero Cards: 2 100% Free Forever Engines */}
+          {/* Primary Hero Cards: 2 Free-Tier Video Compute Options */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
               data-testid="select-engine-free"
               onClick={() => setDraft({ ...draft, activeEngine: 'free-24-7' })}
-              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${
-                draft.activeEngine === 'free-24-7'
-                  ? 'border-white bg-white/10'
-                  : 'border-white/15 bg-white/5 hover:border-white/25'
-              }`}
+              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${draft.activeEngine === 'free-24-7'
+                ? 'border-white bg-white/10'
+                : 'border-white/15 bg-white/5 hover:border-white/25'
+                }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[14px] font-medium text-white flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 stroke-[1.6] shrink-0" />
-                  Free 24/7 Cloud
+                  HF ZeroGPU Cloud
                 </span>
                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-[32px] bg-white/10 text-[#29c58f] border border-white/15 shrink-0">
-                  $0 FOREVER
+                  FREE HF TOKEN
                 </span>
               </div>
               <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
-                FLUX.1-dev Pro + SD 3.5 Large + Wan 2.2 14B (First→Last Frame &amp; FP8) + LTX-Video
-                + MMAudio Synced AI Foley.
+                Runs Wan 2.2 14B, LTX-Video, FLUX.1 &amp; MMAudio in-browser using your free
+                Hugging Face Read token (daily GPU quota).
               </p>
             </button>
 
@@ -236,11 +238,10 @@ export function EngineModal({
               type="button"
               data-testid="select-engine-colab"
               onClick={() => setDraft({ ...draft, activeEngine: 'colab-t4' })}
-              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${
-                draft.activeEngine === 'colab-t4'
-                  ? 'border-white bg-white/10'
-                  : 'border-white/15 bg-white/5 hover:border-white/25'
-              }`}
+              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${draft.activeEngine === 'colab-t4'
+                ? 'border-white bg-white/10'
+                : 'border-white/15 bg-white/5 hover:border-white/25'
+                }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[14px] font-medium text-white flex items-center gap-1.5">
@@ -252,25 +253,25 @@ export function EngineModal({
                 </span>
               </div>
               <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
-                Dedicated free NVIDIA T4 16 GB GPU: SDXL, CogVideoX-2B, LTX-Video &amp; Wan 2.1 with
-                zero public queue.
+                Dedicated free NVIDIA T4 16 GB GPU: 4-bit LTX-Video 0.9.7, Wan 2.1 &amp; AudioLDM2
+                with zero ZeroGPU quota blocks.
               </p>
             </button>
           </div>
 
-          {/* Engine 1 Config ($0 Always-On Open-Weight Cinema Suite) */}
+          {/* Engine 1 Config (HF ZeroGPU + Instant Stills) */}
           <div className="rounded-[16px] border border-white/15 bg-white/[0.04] p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 stroke-[1.6] text-[#29c58f]" />
-                Free 24/7 Cloud Options ($0 Always-On)
+                HF ZeroGPU Options (Free Account Required for Video)
               </div>
-              <span className="text-[11px] text-white/50">Open-Weight · No Paywall</span>
+              <span className="text-[11px] text-white/50">No Credit Card</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[12px] text-white/60 mb-1.5">
-                  Free Keyframe Image Model ($0)
+                  Keyframe Image Model
                 </label>
                 <select
                   data-testid="free-image-model-select"
@@ -280,15 +281,15 @@ export function EngineModal({
                   }
                   className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
-                  <option value="flux" className="bg-[#131314]">FLUX.1-schnell (Fast HD ZeroGPU · Default)</option>
-                  <option value="flux-dev" className="bg-[#131314]">FLUX.1-dev Pro (Flagship Cinema Photoreal · $0)</option>
-                  <option value="sd35-turbo" className="bg-[#131314]">Stability SD 3.5 Large Turbo (Ultra Crisp · $0)</option>
-                  <option value="turbo" className="bg-[#131314]">Pollinations Turbo (Instant 2s Drafts · $0)</option>
+                  <option value="flux" className="bg-[#131314]">FLUX.1-schnell (HF Token / Turbo fallback)</option>
+                  <option value="flux-dev" className="bg-[#131314]">FLUX.1-dev Pro (Requires HF Token)</option>
+                  <option value="sd35-turbo" className="bg-[#131314]">SD 3.5 Large Turbo (Requires HF Token)</option>
+                  <option value="turbo" className="bg-[#131314]">Pollinations Turbo (Instant, No Token)</option>
                 </select>
               </div>
               <div>
                 <label className="block text-[12px] text-white/60 mb-1.5">
-                  Free Video Cascade ($0)
+                  Video Mode
                 </label>
                 <select
                   value={draft.freeVideoFallback}
@@ -301,10 +302,10 @@ export function EngineModal({
                   className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
                   <option value="hf-ltx-space" className="bg-[#131314]">
-                    Real AI Video: Wan 2.2 14B + LTX-Video ($0 ZeroGPU)
+                    Wan 2.2 14B + LTX-Video (HF Token)
                   </option>
                   <option value="ken-burns-local" className="bg-[#131314]">
-                    Still Pan/Zoom Only (No GPU / Not AI Video)
+                    Still Pan/Zoom Only (No AI Video)
                   </option>
                 </select>
               </div>
@@ -359,11 +360,10 @@ export function EngineModal({
               </div>
               {hfStatus && (
                 <div
-                  className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
-                    hfStatus.valid
-                      ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                      : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                  }`}
+                  className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${hfStatus.valid
+                    ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                    : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                    }`}
                 >
                   {hfStatus.valid ? (
                     <>
@@ -460,11 +460,10 @@ export function EngineModal({
 
             {colabHealth && (
               <div
-                className={`flex items-center gap-2 text-[12px] px-3.5 py-2.5 rounded-[12px] border ${
-                  colabHealth.online
-                    ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                    : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                }`}
+                className={`flex items-center gap-2 text-[12px] px-3.5 py-2.5 rounded-[12px] border ${colabHealth.online
+                  ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                  : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                  }`}
               >
                 {colabHealth.online ? (
                   <>
@@ -575,11 +574,10 @@ export function EngineModal({
                     type="button"
                     data-testid="select-engine-omni"
                     onClick={() => setDraft({ ...draft, activeEngine: 'gemini-omni' })}
-                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${
-                      draft.activeEngine === 'gemini-omni'
-                        ? 'border-white bg-white/10'
-                        : 'border-white/15 bg-white/5 hover:border-white/25'
-                    }`}
+                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${draft.activeEngine === 'gemini-omni'
+                      ? 'border-white bg-white/10'
+                      : 'border-white/15 bg-white/5 hover:border-white/25'
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-[13px] font-medium text-white flex items-center gap-1.5">
@@ -599,11 +597,10 @@ export function EngineModal({
                     type="button"
                     data-testid="select-engine-seedance"
                     onClick={() => setDraft({ ...draft, activeEngine: 'seedance-byok' })}
-                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${
-                      draft.activeEngine === 'seedance-byok'
-                        ? 'border-white bg-white/10'
-                        : 'border-white/15 bg-white/5 hover:border-white/25'
-                    }`}
+                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${draft.activeEngine === 'seedance-byok'
+                      ? 'border-white bg-white/10'
+                      : 'border-white/15 bg-white/5 hover:border-white/25'
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-[13px] font-medium text-white flex items-center gap-1.5">
@@ -696,11 +693,10 @@ export function EngineModal({
 
                   {omniStatus && (
                     <div
-                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
-                        omniStatus.valid
-                          ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                          : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                      }`}
+                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${omniStatus.valid
+                        ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                        : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                        }`}
                     >
                       {omniStatus.valid ? (
                         <>
@@ -814,17 +810,17 @@ export function EngineModal({
 
                   {((draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
                     (draft.seedanceProvider === 'fal' && serverKeys.fal)) && (
-                    <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-white/5 text-white">
-                      <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                      <span>
-                        Encrypted Server Key active for{' '}
-                        <strong>
-                          {draft.seedanceProvider === 'replicate' ? 'Replicate' : 'fal.ai'}
-                        </strong>
-                        .
-                      </span>
-                    </div>
-                  )}
+                      <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-white/5 text-white">
+                        <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
+                        <span>
+                          Encrypted Server Key active for{' '}
+                          <strong>
+                            {draft.seedanceProvider === 'replicate' ? 'Replicate' : 'fal.ai'}
+                          </strong>
+                          .
+                        </span>
+                      </div>
+                    )}
 
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
@@ -837,11 +833,11 @@ export function EngineModal({
                         onChange={(e) => setDraft({ ...draft, seedanceApiKey: e.target.value })}
                         placeholder={
                           (draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
-                          (draft.seedanceProvider === 'fal' && serverKeys.fal)
+                            (draft.seedanceProvider === 'fal' && serverKeys.fal)
                             ? 'Using server key (paste to override)'
                             : draft.seedanceProvider === 'replicate'
-                            ? 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-                            : 'xxxxxxxx-xxxx-xxxx:xxxxxxxxxxxxxxxx'
+                              ? 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                              : 'xxxxxxxx-xxxx-xxxx:xxxxxxxxxxxxxxxx'
                         }
                         className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
                       />
@@ -866,11 +862,10 @@ export function EngineModal({
 
                   {seedanceStatus && (
                     <div
-                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
-                        seedanceStatus.valid
-                          ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                          : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                      }`}
+                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${seedanceStatus.valid
+                        ? 'bg-white/5 border-[#29c58f]/40 text-white'
+                        : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                        }`}
                     >
                       {seedanceStatus.valid ? (
                         <>
