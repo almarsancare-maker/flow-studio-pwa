@@ -34,8 +34,8 @@ python test/verify_e2e.py  # Headless Chromium E2E (all 7 fixes + IndexedDB relo
 
 ## Connecting Free Google Colab T4 16 GB GPU ($0)
 
-1. Open **Engine Settings** inside FlowStudio PWA and click **Download Colab Notebook** (or open `colab/FlowStudio_Colab_T4_Backend.ipynb`).
-2. Upload to [Google Colab](https://colab.research.google.com/) and select **Runtime → Change runtime type → T4 GPU**.
+1. Click **1-Click Open in Colab** inside **Engine Settings** (or open directly: https://colab.research.google.com/github/almarsancare-maker/flow-studio-pwa/blob/main/colab/FlowStudio_Colab_T4_Backend.ipynb).
+2. Confirm **Runtime → Change runtime type → T4 GPU**.
 3. Run **Step 1**, **Step 2**, and **Step 5** (`Start FlowStudio PWA Backend Server`).
 4. Paste the printed `https://*.trycloudflare.com` URL into **Engine Settings → Colab T4 Tunnel URL** and click **Test Connection**.
 

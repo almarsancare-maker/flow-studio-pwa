@@ -171,21 +171,21 @@ export function EngineModal({
               </div>
               <div className="flex items-center gap-1.5">
                 <a
+                  href="https://colab.research.google.com/github/almarsancare-maker/flow-studio-pwa/blob/main/colab/FlowStudio_Colab_T4_Backend.ipynb"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-950 bg-emerald-400 hover:bg-emerald-300"
+                >
+                  1-Click Open in Colab
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <a
                   href="/FlowStudio_Colab_T4_Backend.ipynb"
                   download="FlowStudio_Colab_T4_Backend.ipynb"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800"
                 >
                   <Download className="w-3 h-3" />
                   Download Colab Notebook
-                </a>
-                <a
-                  href="https://colab.research.google.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800"
-                >
-                  Open Colab
-                  <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
             </div>
