@@ -199,7 +199,7 @@ export function MediaGrid({
             </button>
           )}
 
-          <div className="relative flex-1 sm:w-52 sm:flex-initial">
+          <div className="relative flex-1 min-w-[180px] sm:w-52 sm:flex-initial">
             <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"

@@ -687,11 +687,15 @@ export default function App() {
         onExportProjectJson={() => void handleExportProjectJson()}
       />
 
-      {/* Toast Notification (Centered non-occluding pill — never covers Search or Filter bars) */}
+      {/* Toast Notification (Bottom-right margin — never occludes TopBar, Search, or centered Composer) */}
       {toast && (
-        <div className="fixed top-2.5 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3.5 py-1.5 rounded-full border border-amber-500/40 bg-zinc-950/95 text-xs text-amber-200 shadow-2xl whitespace-nowrap max-w-[92vw] truncate">
+        <button
+          type="button"
+          onClick={() => setToast(null)}
+          className="fixed bottom-4 right-4 z-50 px-3.5 py-2 rounded-full border border-amber-500/40 bg-zinc-950/95 text-xs text-amber-200 shadow-2xl max-w-[90vw] truncate hover:border-amber-400 transition cursor-pointer"
+        >
           {toast}
-        </div>
+        </button>
       )}
 
       {/* Main Media Canvas */}
