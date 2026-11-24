@@ -132,6 +132,7 @@ export default function App() {
   const [mode, setMode] = useState<GenerationMode>('t2i');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [startFrameDataUrl, setStartFrameDataUrl] = useState<string | undefined>(undefined);
+  const [endFrameDataUrl, setEndFrameDataUrl] = useState<string | undefined>(undefined);
   const [remixRecipe, setRemixRecipe] = useState<RemixRecipePayload | null>(null);
 
   // Drawers / Modals / Toast
@@ -143,6 +144,8 @@ export default function App() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
 
   const processingRef = useRef(false);
+  const deletedShotIdsRef = useRef<Set<string>>(new Set());
+  const nextLabelCounterRef = useRef(1);
   const blobUrlsRef = useRef<Record<string, string>>({});
   const toastTimerRef = useRef<number | null>(null);
 
@@ -236,6 +239,12 @@ export default function App() {
             recovered.push(shot);
           }
         }
+        let maxNum = 0;
+        for (const s of recovered) {
+          const m = /^S0*(\d+)$/i.exec(s.label);
+          if (m) maxNum = Math.max(maxNum, Number(m[1]));
+        }
+        nextLabelCounterRef.current = Math.max(maxNum + 1, recovered.length + 1);
         setShots(recovered);
       }
     );
@@ -285,7 +294,9 @@ export default function App() {
 
   // Auto-processing background batch render queue (Fixes Flow Con #4 & #7)
   const updateShotState = useCallback(async (updated: MediaShot) => {
+    if (deletedShotIdsRef.current.has(updated.id)) return;
     await saveShot(updated);
+    if (deletedShotIdsRef.current.has(updated.id)) return;
     setShots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   }, []);
 
@@ -321,6 +332,7 @@ export default function App() {
             : await runVideoGeneration(current, engineSettings, onProgress);
 
         const blobKey = `blob_${current.id}`;
+        if (deletedShotIdsRef.current.has(current.id)) return;
         await saveBlob(blobKey, result.blob);
         const objUrl = URL.createObjectURL(result.blob);
         blobUrlsRef.current = { ...blobUrlsRef.current, [blobKey]: objUrl };
@@ -382,8 +394,10 @@ export default function App() {
     [shots, lightboxShotId]
   );
 
-  const nextShotLabel = (offset = 0): string => {
-    return `S${String(shots.length + 1 + offset).padStart(2, '0')}`;
+  const nextShotLabel = (): string => {
+    const n = nextLabelCounterRef.current;
+    nextLabelCounterRef.current += 1;
+    return `S${String(n).padStart(2, '0')}`;
   };
 
   // Actions
@@ -443,6 +457,7 @@ export default function App() {
           ? `Free ${engineSettings.freeImageModel.toUpperCase()}`
           : 'Free 24/7 Video',
       startFrameDataUrl: payload.startFrameDataUrl,
+      endFrameDataUrl: payload.endFrameDataUrl,
       storyboardOrder: null,
       createdAt: Date.now(),
     };
@@ -450,7 +465,10 @@ export default function App() {
     await saveShot(newShot);
     setShots((prev) => [newShot, ...prev]);
     setPrompt('');
-    if (payload.mode === 'i2v') setStartFrameDataUrl(undefined);
+    if (payload.mode === 'i2v') {
+      setStartFrameDataUrl(undefined);
+      setEndFrameDataUrl(undefined);
+    }
     showToast(`Queued ${newShot.label} (${kind.toUpperCase()})`);
   };
 
@@ -468,7 +486,7 @@ export default function App() {
       const shot: MediaShot = {
         id: makeId(`shot${i}`),
         projectId: activeProjectId,
-        label: item.label || nextShotLabel(i),
+        label: item.label || nextShotLabel(),
         kind,
         mode: item.mode,
         status: 'queued',
@@ -580,7 +598,43 @@ export default function App() {
     a.click();
   };
 
+  const handleReorderStoryboardClips = async (fromId: string, toId: string) => {
+    const ordered = [...storyboardClips];
+    const fromIdx = ordered.findIndex((c) => c.id === fromId);
+    const toIdx = ordered.findIndex((c) => c.id === toId);
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+    const [moved] = ordered.splice(fromIdx, 1);
+    ordered.splice(toIdx, 0, moved);
+    await Promise.all(
+      ordered.map((clip, i) => updateShotState({ ...clip, storyboardOrder: i + 1 }))
+    );
+  };
+
+  const handleExtendFinalClip = async (clip: MediaShot) => {
+    if (clip.kind === 'video') {
+      await handleGrabLastFrameFromCard(clip);
+    } else {
+      await handleAnimateStill(clip);
+    }
+  };
+
+  const handleRetryAllFailed = async () => {
+    const failed = shots.filter((s) => s.status === 'failed');
+    if (failed.length === 0) return;
+    for (const s of failed) {
+      await updateShotState({
+        ...s,
+        status: 'queued',
+        progress: 5,
+        phase: 'Retrying...',
+        error: undefined,
+      });
+    }
+    showToast(`Re-queued ${failed.length} failed ${failed.length === 1 ? 'shot' : 'shots'}`);
+  };
+
   const handleDeleteShot = async (shot: MediaShot) => {
+    deletedShotIdsRef.current.add(shot.id);
     if (shot.blobKey) {
       await deleteBlob(shot.blobKey);
       if (blobUrlsRef.current[shot.blobKey]) {
@@ -672,9 +726,14 @@ export default function App() {
               error: undefined,
             })
           }
+          onRetryAllFailed={() => void handleRetryAllFailed()}
+          onCancelShot={(shot) => void handleDeleteShot(shot)}
           onDownloadShot={(shot) => void handleDownloadShot(shot)}
           onDeleteShot={(shot) => void handleDeleteShot(shot)}
-          onQuickPrompt={(sample) => setPrompt(sample)}
+          onQuickPrompt={(sample, targetMode) => {
+            setPrompt(sample);
+            if (targetMode) setMode(targetMode);
+          }}
         />
       </main>
 
@@ -684,10 +743,12 @@ export default function App() {
         blobUrls={blobUrls}
         projectName={activeProject?.name ?? 'flowstudio'}
         onMoveClip={(id, dir) => void handleMoveStoryboardClip(id, dir)}
+        onReorderClips={(fromId, toId) => void handleReorderStoryboardClips(fromId, toId)}
         onRemoveClip={(id) => {
           const target = shots.find((s) => s.id === id);
           if (target) void updateShotState({ ...target, storyboardOrder: null });
         }}
+        onExtendFinalClip={(clip) => void handleExtendFinalClip(clip)}
         onExportComplete={showToast}
       />
 
@@ -701,7 +762,10 @@ export default function App() {
         onAspectRatioChange={setAspectRatio}
         startFrameDataUrl={startFrameDataUrl}
         onStartFrameChange={setStartFrameDataUrl}
+        endFrameDataUrl={endFrameDataUrl}
+        onEndFrameChange={setEndFrameDataUrl}
         remixRecipe={remixRecipe}
+        engineSettings={engineSettings}
         bibleEntries={bible}
         queueCount={activeQueueCount}
         onSubmit={(payload) => void handleQueueSingleShot(payload)}
@@ -768,6 +832,11 @@ export default function App() {
           setStartFrameDataUrl(dataUrl);
           setMode('i2v');
           showToast(`Locked ${sourceLabel} → Start Frame ready for next scene!`);
+        }}
+        onInjectEndFrame={(dataUrl, sourceLabel) => {
+          setEndFrameDataUrl(dataUrl);
+          setMode('i2v');
+          showToast(`Locked ${sourceLabel} → End Frame interpolation ready!`);
         }}
         onDownload={(shot) => void handleDownloadShot(shot)}
       />

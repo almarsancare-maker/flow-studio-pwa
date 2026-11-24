@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileText, ListVideo, Sparkles, X } from 'lucide-react';
 import type { GenerationMode, ParsedScriptShot } from '../types/studio';
 import { parseScriptShotList } from '../utils/promptCompiler';
@@ -21,6 +21,15 @@ export function ScriptImportModal({ open, onClose, onImportShots }: ScriptImport
     () => parseScriptShotList(rawText, defaultMode),
     [rawText, defaultMode]
   );
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 

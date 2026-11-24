@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, ImagePlus, Lock, Plus, Trash2, X } from 'lucide-react';
 import type { BibleCategory, BibleEntry } from '../types/studio';
 import { normalizeTag } from '../utils/promptCompiler';
@@ -38,6 +38,15 @@ export function BibleDrawer({
   const [refImage, setRefImage] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 

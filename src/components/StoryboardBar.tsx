@@ -6,6 +6,7 @@ import {
   Film,
   Loader2,
   Play,
+  Plus,
   X,
 } from 'lucide-react';
 import type { MediaShot } from '../types/studio';
@@ -16,8 +17,16 @@ interface StoryboardBarProps {
   blobUrls: Record<string, string>;
   projectName: string;
   onMoveClip: (shotId: string, direction: -1 | 1) => void;
+  onReorderClips: (fromId: string, toId: string) => void;
   onRemoveClip: (shotId: string) => void;
+  onExtendFinalClip: (lastClip: MediaShot) => void;
   onExportComplete: (message: string) => void;
+}
+
+function formatTimecode(totalSec: number): string {
+  const mins = Math.floor(totalSec / 60);
+  const secs = Math.floor(totalSec % 60);
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 export function StoryboardBar({
@@ -25,7 +34,9 @@ export function StoryboardBar({
   blobUrls,
   projectName,
   onMoveClip,
+  onReorderClips,
   onRemoveClip,
+  onExtendFinalClip,
   onExportComplete,
 }: StoryboardBarProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -33,13 +44,22 @@ export function StoryboardBar({
   const [stitching, setStitching] = useState(false);
   const [stitchStatus, setStitchStatus] = useState('');
   const [stitchPct, setStitchPct] = useState(0);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const activeClip = clips[previewIndex];
   const activeUrl = activeClip
     ? (activeClip.blobKey && blobUrls[activeClip.blobKey]) || activeClip.thumbnailDataUrl
     : undefined;
 
-  // Auto-advance still images during continuous sequence preview
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewOpen]);
+
   useEffect(() => {
     if (!previewOpen || !activeClip || activeClip.kind !== 'image') return;
     const timer = window.setTimeout(() => {
@@ -54,6 +74,7 @@ export function StoryboardBar({
     (sum, c) => sum + (c.kind === 'video' ? c.durationSec : 3),
     0
   );
+  const lastClip = clips[clips.length - 1];
 
   const handleExportStitched = async () => {
     setStitching(true);
@@ -90,7 +111,7 @@ export function StoryboardBar({
       a.download = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_sequence.${ext}`;
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      onExportComplete(`Exported stitched sequence (${clips.length} clips, ~${totalSeconds}s)`);
+      onExportComplete(`Exported stitched sequence (${clips.length} clips, ${formatTimecode(totalSeconds)})`);
     } catch (err) {
       onExportComplete(
         `Stitch export error: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -102,25 +123,37 @@ export function StoryboardBar({
 
   return (
     <>
-      <div className="max-w-4xl w-full mx-auto px-3 sm:px-5 mb-1">
-        <div className="rounded-2xl border border-zinc-800/90 flow-glass px-3 py-2.5 shadow-xl">
+      <div className="max-w-4xl w-full mx-auto px-3 sm:px-5 mb-1.5">
+        <div className="rounded-2xl border border-zinc-800/90 flow-glass px-3.5 py-2.5 shadow-xl">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div className="flex items-center gap-2 text-xs">
               <Film className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-semibold text-zinc-200">Storyboard Cut</span>
-              <span className="text-[11px] text-zinc-400">
-                {clips.length} {clips.length === 1 ? 'clip' : 'clips'} · ~{totalSeconds}s
+              <span className="font-semibold text-zinc-100">Storyboard Cut</span>
+              <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-300">
+                {clips.length} {clips.length === 1 ? 'clip' : 'clips'} · {formatTimecode(totalSeconds)}
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Google Flow Signature Scenebuilder Action: Extend Cut -> */}
+              <button
+                type="button"
+                data-testid="extend-storyboard-btn"
+                onClick={() => onExtendFinalClip(lastClip)}
+                title={`Grab last frame of ${lastClip.label} to direct the next continuous scene`}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 border border-amber-500/35 text-amber-200 hover:bg-amber-500/25 transition"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Extend Scene</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
                   setPreviewIndex(0);
                   setPreviewOpen(true);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-zinc-900 border border-zinc-700 text-zinc-200 hover:bg-zinc-800"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-zinc-900 border border-zinc-700 text-zinc-200 hover:bg-zinc-800"
               >
                 <Play className="w-3 h-3 text-emerald-400" />
                 Play Sequence
@@ -129,7 +162,7 @@ export function StoryboardBar({
                 type="button"
                 disabled={stitching}
                 onClick={() => void handleExportStitched()}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-400 text-zinc-950 hover:bg-emerald-300 disabled:opacity-60"
+                className="flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-400 text-zinc-950 hover:bg-emerald-300 disabled:opacity-60"
               >
                 {stitching ? (
                   <>
@@ -153,7 +186,7 @@ export function StoryboardBar({
             </div>
           )}
 
-          {/* Horizontal Reorderable Strip */}
+          {/* Drag-and-Drop Reorderable Scenebuilder Strip */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {clips.map((clip, idx) => {
               const thumb =
@@ -161,7 +194,21 @@ export function StoryboardBar({
               return (
                 <div
                   key={clip.id}
-                  className="shrink-0 w-32 rounded-xl border border-zinc-800 bg-zinc-900/80 overflow-hidden"
+                  draggable
+                  onDragStart={() => setDragId(clip.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragId && dragId !== clip.id) {
+                      onReorderClips(dragId, clip.id);
+                    }
+                    setDragId(null);
+                  }}
+                  onDragEnd={() => setDragId(null)}
+                  className={`shrink-0 w-32 rounded-xl border bg-zinc-900/85 overflow-hidden cursor-grab active:cursor-grabbing transition ${
+                    dragId === clip.id
+                      ? 'border-amber-400 opacity-60 scale-95'
+                      : 'border-zinc-800 hover:border-zinc-600'
+                  }`}
                 >
                   <div className="relative h-16 bg-zinc-950">
                     {thumb ? (
@@ -171,14 +218,14 @@ export function StoryboardBar({
                         <img src={thumb} alt={clip.label} className="w-full h-full object-cover" />
                       )
                     ) : null}
-                    <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-black/75 text-[10px] font-mono text-amber-300">
+                    <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded-full bg-black/75 text-[10px] font-mono text-amber-300">
                       {idx + 1}. {clip.label}
                     </span>
                     <button
                       type="button"
                       onClick={() => onRemoveClip(clip.id)}
                       title="Remove from Storyboard"
-                      className="absolute top-1 right-1 p-0.5 rounded bg-black/70 text-zinc-300 hover:text-rose-400"
+                      className="absolute top-1 right-1 p-0.5 rounded-full bg-black/70 text-zinc-300 hover:text-rose-400"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
@@ -265,14 +312,14 @@ export function StoryboardBar({
                   onClick={() =>
                     setPreviewIndex((idx) => (idx - 1 + clips.length) % clips.length)
                   }
-                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 hover:text-zinc-100"
+                  className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 hover:text-zinc-100"
                 >
                   Prev
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreviewIndex((idx) => (idx + 1) % clips.length)}
-                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 hover:text-zinc-100"
+                  className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 hover:text-zinc-100"
                 >
                   Next
                 </button>

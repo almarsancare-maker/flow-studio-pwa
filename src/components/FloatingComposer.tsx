@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRight,
   ArrowUp,
+  Camera,
   Clapperboard,
   Dice5,
   Film,
@@ -10,9 +12,10 @@ import {
   SlidersHorizontal,
   Sparkles,
   Unlock,
+  Volume2,
   X,
 } from 'lucide-react';
-import type { AspectRatio, BibleEntry, GenerationMode } from '../types/studio';
+import type { AspectRatio, BibleEntry, EngineSettings, GenerationMode } from '../types/studio';
 import { compilePromptWithBible } from '../utils/promptCompiler';
 import { fileToResizedDataUrl } from '../utils/frameGrabber';
 
@@ -26,6 +29,7 @@ export interface ComposerSubmitPayload {
   cfgScale: number;
   seed: number;
   startFrameDataUrl?: string;
+  endFrameDataUrl?: string;
 }
 
 export interface RemixRecipePayload {
@@ -46,11 +50,24 @@ interface FloatingComposerProps {
   onAspectRatioChange: (ar: AspectRatio) => void;
   startFrameDataUrl?: string;
   onStartFrameChange: (dataUrl?: string) => void;
+  endFrameDataUrl?: string;
+  onEndFrameChange: (dataUrl?: string) => void;
   remixRecipe?: RemixRecipePayload | null;
+  engineSettings: EngineSettings;
   bibleEntries: BibleEntry[];
   queueCount: number;
   onSubmit: (payload: ComposerSubmitPayload) => void;
 }
+
+const CAMERA_PRESETS = [
+  { label: 'Dolly In', snippet: 'smooth cinematic slow dolly-in' },
+  { label: 'Pan Left', snippet: 'steady horizontal pan left' },
+  { label: 'Orbit 360°', snippet: 'slow orbital camera sweep around subject' },
+  { label: 'Handheld', snippet: 'intimate 35mm handheld cinema camera' },
+  { label: 'Crane Up', snippet: 'sweeping crane shot rising upward' },
+  { label: 'Rack Focus', snippet: 'shallow depth of field rack focus pull' },
+  { label: 'Slow Mo', snippet: 'silky cinematic slow motion 60fps' },
+];
 
 export function FloatingComposer({
   prompt,
@@ -61,12 +78,15 @@ export function FloatingComposer({
   onAspectRatioChange,
   startFrameDataUrl,
   onStartFrameChange,
+  endFrameDataUrl,
+  onEndFrameChange,
   remixRecipe,
+  engineSettings,
   bibleEntries,
   queueCount,
   onSubmit,
 }: FloatingComposerProps) {
-  const [durationSec, setDurationSec] = useState(4);
+  const [durationSec, setDurationSec] = useState(5);
   const [negativePrompt, setNegativePrompt] = useState(
     'blurry, deformed hands, extra limbs, watermark, text, low quality, flickering'
   );
@@ -75,7 +95,11 @@ export function FloatingComposer({
   const [steps, setSteps] = useState(24);
   const [cfgScale, setCfgScale] = useState(6.5);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showCameraBar, setShowCameraBar] = useState(false);
   const [showExpandedPreview, setShowExpandedPreview] = useState(false);
+
+  const startInputRef = useRef<HTMLInputElement | null>(null);
+  const endInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!remixRecipe) return;
@@ -87,17 +111,16 @@ export function FloatingComposer({
     setDurationSec(remixRecipe.durationSec);
   }, [remixRecipe]);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const compiled = useMemo(
     () => compilePromptWithBible(prompt, bibleEntries),
     [prompt, bibleEntries]
   );
 
-  const handlePickStartFrame = async (file: File | undefined) => {
+  const handlePickFrame = async (file: File | undefined, slot: 'start' | 'end') => {
     if (!file) return;
     const dataUrl = await fileToResizedDataUrl(file, 1024);
-    onStartFrameChange(dataUrl);
+    if (slot === 'start') onStartFrameChange(dataUrl);
+    else onEndFrameChange(dataUrl);
     onModeChange('i2v');
   };
 
@@ -119,7 +142,15 @@ export function FloatingComposer({
       seed: effectiveSeed,
       startFrameDataUrl:
         mode === 'i2v' ? startFrameDataUrl ?? compiled.suggestedRefImage : undefined,
+      endFrameDataUrl: mode === 'i2v' ? endFrameDataUrl : undefined,
     });
+  };
+
+  const appendText = (chunk: string) => {
+    const trimmed = prompt.trim();
+    if (trimmed.toLowerCase().includes(chunk.toLowerCase())) return;
+    const sep = trimmed.length === 0 ? '' : trimmed.endsWith(',') ? ' ' : ', ';
+    onPromptChange(`${trimmed}${sep}${chunk}`);
   };
 
   const appendTag = (tag: string) => {
@@ -127,15 +158,17 @@ export function FloatingComposer({
     onPromptChange(`${prompt}${spacer}${tag} `);
   };
 
+  const isSeedanceVideo = mode !== 't2i' && engineSettings.activeEngine === 'seedance-byok';
+
   return (
     <div className="sticky bottom-0 z-30 pb-3 pt-2 px-3 sm:px-5 pointer-events-none">
       <div className="max-w-4xl mx-auto pointer-events-auto">
         {/* Advanced Recipe Popover (Fix #4: Transparent Seeds, Negative Prompts, Steps, CFG) */}
         {showAdvanced && (
-          <div className="mb-2 rounded-2xl border border-zinc-800 flow-glass p-3.5 shadow-2xl space-y-3">
+          <div className="mb-2 rounded-2xl border border-zinc-800/90 flow-glass p-3.5 shadow-2xl space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-zinc-200">
-                Shot Recipe Controls (Fix #4: No Black-Box Prompts)
+                Shot Recipe Controls (Seed Lock, Negative Prompt, Steps &amp; CFG)
               </span>
               <button
                 type="button"
@@ -218,11 +251,11 @@ export function FloatingComposer({
           </div>
         )}
 
-        {/* Main Glassmorphic Google Flow Composer Dock */}
-        <div className="rounded-2xl border border-zinc-800/90 flow-glass shadow-2xl shadow-black/60 p-3 space-y-2.5">
-          {/* Top Row: Mode Switcher + Start Frame Slot + Quick @TAG Chips */}
+        {/* 1:1 Google Flow Floating Glassmorphic Composer Pill */}
+        <div className="rounded-[26px] border border-zinc-800/90 focus-within:border-zinc-600/90 flow-pill p-3 sm:p-3.5 space-y-2.5 transition-colors">
+          {/* Top Row: Flow Mode Tabs + Bible @TAG Chips */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="inline-flex rounded-xl bg-zinc-950/90 p-0.5 border border-zinc-800/90">
+            <div className="inline-flex rounded-full bg-zinc-950/95 p-0.5 border border-zinc-800/90">
               {(
                 [
                   { id: 't2i', label: 'Keyframe Still', icon: ImageIcon },
@@ -238,10 +271,10 @@ export function FloatingComposer({
                     type="button"
                     data-testid={`mode-tab-${tab.id}`}
                     onClick={() => onModeChange(tab.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition ${
                       active
-                        ? 'bg-zinc-800 text-amber-300 shadow-sm'
-                        : 'text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-zinc-100 text-zinc-950 shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-100'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -269,57 +302,102 @@ export function FloatingComposer({
             )}
           </div>
 
-          {/* Start Frame Chip (visible when mode === 'i2v' or a grabbed frame is loaded) */}
-          {(mode === 'i2v' || startFrameDataUrl) && (
-            <div className="flex items-center gap-2.5 p-2 rounded-xl bg-zinc-950/80 border border-zinc-800">
+          {/* Google Flow First Frame -> Last Frame Slots (visible in Frames-to-Video or when a frame is loaded) */}
+          {(mode === 'i2v' || startFrameDataUrl || endFrameDataUrl) && (
+            <div className="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-2 p-2 rounded-2xl bg-zinc-950/85 border border-zinc-800/90">
               <input
-                ref={fileInputRef}
+                ref={startInputRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => void handlePickStartFrame(e.target.files?.[0])}
+                onChange={(e) => void handlePickFrame(e.target.files?.[0], 'start')}
               />
+              <input
+                ref={endInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void handlePickFrame(e.target.files?.[0], 'end')}
+              />
+
+              {/* Start Frame Slot */}
               {startFrameDataUrl ? (
-                <>
+                <div className="flex items-center gap-2 min-w-0">
                   <img
                     src={startFrameDataUrl}
                     alt="Start frame"
-                    className="w-16 h-10 rounded-lg object-cover border border-amber-500/40"
+                    className="w-14 h-9 rounded-lg object-cover border border-amber-500/50 shrink-0"
                   />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-amber-300">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-medium text-amber-300 truncate">
                       Start Frame Locked (Scene Continuity Active)
                     </div>
-                    <div className="text-[11px] text-zinc-500 truncate">
-                      Next video shot will seamlessly continue from this exact frame.
-                    </div>
+                    <div className="text-[10px] text-zinc-500 truncate">Opening frame of shot</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onStartFrameChange(undefined)}
-                    className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900"
+                    className="p-1 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900"
                     title="Clear Start Frame"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
-                </>
+                </div>
               ) : (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 text-xs text-zinc-400 hover:text-amber-300 transition w-full py-1 px-1"
+                  onClick={() => startInputRef.current?.click()}
+                  className="flex items-center gap-2 text-xs text-zinc-400 hover:text-amber-300 transition py-1 px-1.5 rounded-xl hover:bg-zinc-900/80"
                 >
-                  <ImagePlus className="w-4 h-4 text-amber-400" />
-                  <span>
-                    Upload Start Frame — or click <strong className="text-zinc-200">Grab Last Frame</strong> on any clip above!
+                  <ImagePlus className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">
+                    <strong className="text-zinc-200">Start Frame</strong> — upload or Grab Last Frame
+                  </span>
+                </button>
+              )}
+
+              <ArrowRight className="w-3.5 h-3.5 text-zinc-600 hidden sm:block" />
+
+              {/* End Frame Slot (Google Flow First -> Last Frame Interpolation for Seedance 2.5!) */}
+              {endFrameDataUrl ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <img
+                    src={endFrameDataUrl}
+                    alt="End frame"
+                    className="w-14 h-9 rounded-lg object-cover border border-violet-500/50 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-medium text-violet-300 truncate">
+                      End Frame Locked
+                    </div>
+                    <div className="text-[10px] text-zinc-500 truncate">Target ending composition</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onEndFrameChange(undefined)}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-900"
+                    title="Clear End Frame"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => endInputRef.current?.click()}
+                  className="flex items-center gap-2 text-xs text-zinc-500 hover:text-violet-300 transition py-1 px-1.5 rounded-xl hover:bg-zinc-900/80"
+                >
+                  <ImagePlus className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <span className="truncate">
+                    <strong className="text-zinc-300">End Frame</strong> (optional morph target)
                   </span>
                 </button>
               )}
             </div>
           )}
 
-          {/* Prompt Textarea */}
-          <div className="relative">
+          {/* Prompt Input */}
+          <div className="relative px-1">
             <textarea
               rows={2}
               data-testid="composer-prompt-input"
@@ -333,16 +411,35 @@ export function FloatingComposer({
               }}
               placeholder={
                 mode === 't2i'
-                  ? 'Describe your cinematic keyframe... Use @MIRA or @LOC-D from your Bible (Ctrl+Enter to queue)'
-                  : 'Describe camera motion and action... e.g. Slow dolly-in on @MIRA inside @LOC-D, rain streaking on glass'
+                  ? 'Describe your $0 keyframe still... Use @MIRA or @LOC-D from your Bible (Ctrl+Enter)'
+                  : 'Direct camera motion, action & spoken "dialogue"... Use @MIRA or @LOC-D (Ctrl+Enter)'
               }
               className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 outline-none resize-none leading-relaxed pr-2"
             />
           </div>
 
+          {/* 1-Click Camera Motion Presets Drawer (Flow Director Controls) */}
+          {showCameraBar && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 px-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+                Camera:
+              </span>
+              {CAMERA_PRESETS.map((cam) => (
+                <button
+                  key={cam.label}
+                  type="button"
+                  onClick={() => appendText(cam.snippet)}
+                  className="px-2.5 py-0.5 rounded-full text-[11px] bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-amber-500/40 hover:text-amber-200 shrink-0 transition"
+                >
+                  + {cam.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Bible Expansion Indicator */}
           {compiled.appliedTags.length > 0 && (
-            <div className="text-[11px] bg-amber-500/8 border border-amber-500/20 rounded-lg px-2.5 py-1.5 text-amber-200/90">
+            <div className="text-[11px] bg-amber-500/8 border border-amber-500/20 rounded-xl px-2.5 py-1.5 text-amber-200/90">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-3 h-3 text-amber-400" />
@@ -368,14 +465,14 @@ export function FloatingComposer({
           )}
 
           {/* Bottom Controls Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-800/70">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-zinc-800/70">
             <div className="flex flex-wrap items-center gap-1.5">
               {/* Aspect Ratio */}
               <select
                 aria-label="Aspect ratio"
                 value={aspectRatio}
                 onChange={(e) => onAspectRatioChange(e.target.value as AspectRatio)}
-                className="px-2 py-1 text-xs rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none"
+                className="px-2.5 py-1 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none hover:border-zinc-700 cursor-pointer"
               >
                 <option value="16:9">16:9 Cinema</option>
                 <option value="9:16">9:16 Reels</option>
@@ -389,22 +486,37 @@ export function FloatingComposer({
                   aria-label="Duration"
                   value={durationSec}
                   onChange={(e) => setDurationSec(Number(e.target.value))}
-                  className="px-2 py-1 text-xs rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none"
+                  className="px-2.5 py-1 text-xs rounded-full bg-zinc-900 border border-zinc-800 text-zinc-200 outline-none hover:border-zinc-700 cursor-pointer"
                 >
-                  <option value={3}>3s clip</option>
-                  <option value={4}>4s clip</option>
-                  <option value={5}>5s clip</option>
-                  <option value={6}>6s clip</option>
-                  <option value={8}>8s clip (Seedance)</option>
-                  <option value={10}>10s clip (Seedance)</option>
+                  <option value={3}>3s</option>
+                  <option value={4}>4s</option>
+                  <option value={5}>5s</option>
+                  <option value={6}>6s</option>
+                  <option value={8}>8s (Seedance)</option>
+                  <option value={10}>10s (Seedance)</option>
                 </select>
               )}
+
+              {/* Camera Motion Presets Toggle */}
+              <button
+                type="button"
+                data-testid="toggle-camera-presets-btn"
+                onClick={() => setShowCameraBar((v) => !v)}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition ${
+                  showCameraBar
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                }`}
+              >
+                <Camera className="w-3 h-3" />
+                <span>Camera</span>
+              </button>
 
               {/* Recipe Popover Toggle */}
               <button
                 type="button"
                 onClick={() => setShowAdvanced((v) => !v)}
-                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition ${
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition ${
                   showAdvanced || seedLocked
                     ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
                     : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
@@ -414,12 +526,20 @@ export function FloatingComposer({
                 <span>Recipe</span>
                 {seedLocked && <Lock className="w-2.5 h-2.5 text-amber-400" />}
               </button>
+
+              {/* Seedance Native Audio Status Badge */}
+              {isSeedanceVideo && engineSettings.seedanceAudio && (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-200">
+                  <Volume2 className="w-3 h-3 text-violet-400" />
+                  Audio ON
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
               {queueCount > 0 && (
                 <span className="text-[11px] text-amber-300/90 animate-pulse">
-                  {queueCount} rendering...
+                  {queueCount} active...
                 </span>
               )}
               <button
@@ -427,9 +547,19 @@ export function FloatingComposer({
                 data-testid="composer-submit-btn"
                 disabled={!prompt.trim()}
                 onClick={handleQueue}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-400 to-orange-400 text-zinc-950 hover:from-amber-300 hover:to-orange-300 disabled:opacity-40 shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold disabled:opacity-40 shadow-lg transition cursor-pointer ${
+                  isSeedanceVideo
+                    ? 'bg-gradient-to-r from-violet-400 to-fuchsia-400 text-zinc-950 hover:from-violet-300 hover:to-fuchsia-300 shadow-violet-500/25'
+                    : 'bg-gradient-to-r from-amber-400 to-orange-400 text-zinc-950 hover:from-amber-300 hover:to-orange-300 shadow-amber-500/20'
+                }`}
               >
-                <span>{mode === 't2i' ? 'Generate Still' : 'Generate Video'}</span>
+                <span>
+                  {mode === 't2i'
+                    ? 'Generate Still ($0)'
+                    : isSeedanceVideo
+                    ? 'Generate Seedance'
+                    : 'Generate Video'}
+                </span>
                 <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             </div>

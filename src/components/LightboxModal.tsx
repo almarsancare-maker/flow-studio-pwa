@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Clapperboard, Download, Scissors, Sparkles, X } from 'lucide-react';
 import type { MediaShot } from '../types/studio';
 import { grabVideoFrame } from '../utils/frameGrabber';
@@ -8,6 +8,7 @@ interface LightboxModalProps {
   mediaUrl?: string;
   onClose: () => void;
   onInjectStartFrame: (dataUrl: string, sourceLabel: string) => void;
+  onInjectEndFrame: (dataUrl: string, sourceLabel: string) => void;
   onDownload: (shot: MediaShot) => void;
 }
 
@@ -16,11 +17,21 @@ export function LightboxModal({
   mediaUrl,
   onClose,
   onInjectStartFrame,
+  onInjectEndFrame,
   onDownload,
 }: LightboxModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    if (!shot) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shot, onClose]);
 
   if (!shot || !mediaUrl) return null;
 
@@ -94,17 +105,29 @@ export function LightboxModal({
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onInjectStartFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
-                    onClose();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300"
-                >
-                  <Clapperboard className="w-3.5 h-3.5" />
-                  Animate This Keyframe → I2V
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onInjectStartFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
+                      onClose();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300"
+                  >
+                    <Clapperboard className="w-3.5 h-3.5" />
+                    Animate This Keyframe → I2V
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onInjectEndFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
+                      onClose();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-violet-500/15 border border-violet-500/40 text-violet-200 hover:bg-violet-500/25"
+                  >
+                    Use as End Frame
+                  </button>
+                </>
               )}
             </div>
 
