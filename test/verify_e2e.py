@@ -23,8 +23,8 @@ def main():
 
         print(f"[1/6] Loading {BASE_URL} ...")
         page.goto(BASE_URL, wait_until="networkidle")
-        assert "FlowStudio" in page.title(), f"Unexpected title: {page.title()}"
-        page.get_by_text("Direct your next film at $0 cost").wait_for(timeout=10_000)
+        assert "Cabardo" in page.title(), f"Unexpected title: {page.title()}"
+        page.get_by_text("Cabardo Studio AI Generator").first.wait_for(timeout=10_000)
 
         print("[2/6] Testing Character & Location Bible (@TAG Vault) ...")
         page.get_by_test_id("open-bible-btn").click()

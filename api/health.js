@@ -8,7 +8,7 @@ export default function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    service: 'FlowStudio PWA Zero-Cost API',
+    service: 'Cabardo Studio AI Generator FREE Lifetime API',
     version: '1.0.0',
     engines: [
       {

@@ -54,7 +54,8 @@ export function MediaGrid({
           <Sparkles className="w-7 h-7 text-amber-400" />
         </div>
         <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-100">
-          Direct your next film at $0 cost
+          Cabardo Studio AI Generator{' '}
+          <span className="text-emerald-400">FREE Lifetime</span>
         </h1>
         <p className="text-sm text-zinc-400 max-w-xl mt-2 leading-relaxed">
           Built like Google Flow — with all 7 limitations fixed: locked <span className="text-amber-300">@TAG</span> Character Bible,

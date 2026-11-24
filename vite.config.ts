@@ -78,10 +78,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'FlowStudio — Zero-Cost AI Cinema PWA',
-        short_name: 'FlowStudio',
+        name: 'Cabardo Studio AI Generator FREE Lifetime',
+        short_name: 'Cabardo Studio',
         description:
-          'Google Flow-inspired AI Video & Image Studio with Character Bible, Frame Continuity, Storyboard Stitcher, and $0 Dual-GPU Engine.',
+          'Cabardo Studio AI Generator FREE Lifetime — AI Video & Image Studio with Character Bible, Frame Continuity, Storyboard Stitcher, and $0 Dual-GPU Engine.',
         theme_color: '#09090b',
         background_color: '#09090b',
         display: 'standalone',
