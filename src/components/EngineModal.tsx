@@ -18,12 +18,14 @@ import {
   verifySeedanceApiKey,
   type ColabHealthStatus,
   type SeedanceKeyStatus,
+  type ServerKeyCapabilities,
 } from '../services/engine';
 
 interface EngineModalProps {
   open: boolean;
   settings: EngineSettings;
   colabHealth: ColabHealthStatus | null;
+  serverKeys: ServerKeyCapabilities;
   onClose: () => void;
   onSaveSettings: (next: EngineSettings) => Promise<void>;
   onHealthUpdate: (status: ColabHealthStatus) => void;
@@ -49,6 +51,7 @@ export function EngineModal({
   open,
   settings,
   colabHealth,
+  serverKeys,
   onClose,
   onSaveSettings,
   onHealthUpdate,
@@ -307,6 +310,17 @@ export function EngineModal({
               </label>
             </div>
 
+            {((draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
+              (draft.seedanceProvider === 'fal' && serverKeys.fal)) && (
+              <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border bg-emerald-500/10 border-emerald-500/30 text-emerald-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  Encrypted Vercel Server Key active for{' '}
+                  <strong>{draft.seedanceProvider === 'replicate' ? 'Replicate' : 'fal.ai'}</strong> — Seedance 2.5 is ready immediately (optional override below).
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <KeyRound className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -317,7 +331,10 @@ export function EngineModal({
                   value={draft.seedanceApiKey}
                   onChange={(e) => setDraft({ ...draft, seedanceApiKey: e.target.value })}
                   placeholder={
-                    draft.seedanceProvider === 'replicate'
+                    (draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
+                    (draft.seedanceProvider === 'fal' && serverKeys.fal)
+                      ? 'Using encrypted server key (paste another key only to override)'
+                      : draft.seedanceProvider === 'replicate'
                       ? 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
                       : 'xxxxxxxx-xxxx-xxxx:xxxxxxxxxxxxxxxx'
                   }
@@ -327,7 +344,13 @@ export function EngineModal({
               <button
                 type="button"
                 data-testid="seedance-verify-btn"
-                disabled={testingSeedance || !draft.seedanceApiKey.trim()}
+                disabled={
+                  testingSeedance ||
+                  (!draft.seedanceApiKey.trim() &&
+                    !(draft.seedanceProvider === 'replicate'
+                      ? serverKeys.replicate
+                      : serverKeys.fal))
+                }
                 onClick={() => void handleTestSeedance()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-500/20 border border-violet-500/40 text-violet-200 hover:bg-violet-500/30 disabled:opacity-40"
               >

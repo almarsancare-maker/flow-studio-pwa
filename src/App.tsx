@@ -30,10 +30,12 @@ import {
 import { compilePromptWithBible } from './utils/promptCompiler';
 import { blobToDataUrl, grabVideoFrame } from './utils/frameGrabber';
 import {
+  fetchServerCapabilities,
   pingColabBackend,
   runImageGeneration,
   runVideoGeneration,
   type ColabHealthStatus,
+  type ServerKeyCapabilities,
 } from './services/engine';
 import { TopBar } from './components/TopBar';
 import { BibleDrawer } from './components/BibleDrawer';
@@ -119,6 +121,10 @@ export default function App() {
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [engineSettings, setEngineSettings] = useState<EngineSettings>(DEFAULT_ENGINE_SETTINGS);
   const [colabHealth, setColabHealth] = useState<ColabHealthStatus | null>(null);
+  const [serverKeys, setServerKeys] = useState<ServerKeyCapabilities>({
+    replicate: false,
+    fal: false,
+  });
   const [vaultMB, setVaultMB] = useState(0);
 
   // Composer controlled state
@@ -164,20 +170,38 @@ export default function App() {
   // Initial IndexedDB hydration (singleton-safe under React 19 StrictMode)
   useEffect(() => {
     let active = true;
-    void ensureVaultBootstrapped().then(async ({ projects: loadedProjects, settings: loadedSettings }) => {
-      if (!active) return;
-      setEngineSettings(loadedSettings);
-      setProjects(loadedProjects);
-      const savedId = window.localStorage.getItem('flowstudio_active_project');
-      const matched = loadedProjects.find((p) => p.id === savedId);
-      setActiveProjectId(matched ? matched.id : loadedProjects[0].id);
-      if (loadedSettings.activeEngine === 'colab-t4' && loadedSettings.colabUrl.trim()) {
-        void pingColabBackend(loadedSettings.colabUrl).then((health) => {
-          if (active) setColabHealth(health);
-        });
+    void Promise.all([ensureVaultBootstrapped(), fetchServerCapabilities()]).then(
+      async ([{ projects: loadedProjects, settings: loadedSettings }, caps]) => {
+        if (!active) return;
+        setServerKeys(caps);
+
+        let effectiveSettings = loadedSettings;
+        const userPicked = window.localStorage.getItem('cabardo_engine_user_set');
+        if (!userPicked && (caps.replicate || caps.fal) && loadedSettings.activeEngine === 'free-24-7') {
+          effectiveSettings = {
+            ...loadedSettings,
+            activeEngine: 'seedance-byok',
+            seedanceProvider: caps.replicate ? 'replicate' : 'fal',
+            seedanceModel: caps.replicate
+              ? 'bytedance/seedance-2.5'
+              : 'bytedance/seedance-2.5/text-to-video',
+          };
+          await saveEngineSettings(effectiveSettings);
+        }
+
+        setEngineSettings(effectiveSettings);
+        setProjects(loadedProjects);
+        const savedId = window.localStorage.getItem('flowstudio_active_project');
+        const matched = loadedProjects.find((p) => p.id === savedId);
+        setActiveProjectId(matched ? matched.id : loadedProjects[0].id);
+        if (effectiveSettings.activeEngine === 'colab-t4' && effectiveSettings.colabUrl.trim()) {
+          void pingColabBackend(effectiveSettings.colabUrl).then((health) => {
+            if (active) setColabHealth(health);
+          });
+        }
+        await refreshVaultUsage();
       }
-      await refreshVaultUsage();
-    });
+    );
     return () => {
       active = false;
     };
@@ -594,6 +618,7 @@ export default function App() {
         onCreateProject={(name) => void handleCreateProject(name)}
         engineSettings={engineSettings}
         colabHealth={colabHealth}
+        serverKeys={serverKeys}
         bibleCount={bible.length}
         vaultMB={vaultMB}
         canInstallPwa={Boolean(installEvent)}
@@ -713,8 +738,10 @@ export default function App() {
         open={engineOpen}
         settings={engineSettings}
         colabHealth={colabHealth}
+        serverKeys={serverKeys}
         onClose={() => setEngineOpen(false)}
         onSaveSettings={async (next) => {
+          window.localStorage.setItem('cabardo_engine_user_set', '1');
           await saveEngineSettings(next);
           setEngineSettings(next);
           showToast(

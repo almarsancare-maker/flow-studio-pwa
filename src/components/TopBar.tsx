@@ -12,7 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { EngineSettings, Project } from '../types/studio';
-import type { ColabHealthStatus } from '../services/engine';
+import type { ColabHealthStatus, ServerKeyCapabilities } from '../services/engine';
 
 interface TopBarProps {
   projects: Project[];
@@ -21,6 +21,7 @@ interface TopBarProps {
   onCreateProject: (name: string) => void;
   engineSettings: EngineSettings;
   colabHealth: ColabHealthStatus | null;
+  serverKeys: ServerKeyCapabilities;
   bibleCount: number;
   vaultMB: number;
   canInstallPwa: boolean;
@@ -38,6 +39,7 @@ export function TopBar({
   onCreateProject,
   engineSettings,
   colabHealth,
+  serverKeys,
   bibleCount,
   vaultMB,
   canInstallPwa,
@@ -61,7 +63,10 @@ export function TopBar({
   const isColabActive = engineSettings.activeEngine === 'colab-t4';
   const isSeedanceActive = engineSettings.activeEngine === 'seedance-byok';
   const colabConnected = isColabActive && colabHealth?.online;
-  const seedanceHasKey = isSeedanceActive && engineSettings.seedanceApiKey.trim().length > 0;
+  const hasServerSeedance =
+    engineSettings.seedanceProvider === 'replicate' ? serverKeys.replicate : serverKeys.fal;
+  const seedanceHasKey =
+    isSeedanceActive && (engineSettings.seedanceApiKey.trim().length > 0 || hasServerSeedance);
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-800/80 flow-glass">

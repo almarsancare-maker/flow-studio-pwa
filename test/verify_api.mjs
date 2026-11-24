@@ -47,8 +47,8 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   await healthHandler({ method: 'GET' }, res);
   assert.equal(res.result.statusCode, 200);
   assert.equal(res.result.body.ok, true);
-  assert.equal(res.result.body.engines.length, 2);
-  console.log('[PASS] Test 1: /api/health returns both $0 engines');
+  assert.equal(res.result.body.engines.length, 3);
+  console.log('[PASS] Test 1: /api/health returns all 3 engines + serverKeys');
 }
 
 // Test 2: Strict SSRF allowlist validation

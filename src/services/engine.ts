@@ -13,7 +13,27 @@ export interface ColabHealthStatus {
 export interface SeedanceKeyStatus {
   valid: boolean;
   account?: string;
+  usingServerKey?: boolean;
   error?: string;
+}
+
+export interface ServerKeyCapabilities {
+  replicate: boolean;
+  fal: boolean;
+}
+
+export async function fetchServerCapabilities(): Promise<ServerKeyCapabilities> {
+  try {
+    const resp = await fetchWithTimeout('/api/health', {}, 8_000);
+    if (!resp.ok) return { replicate: false, fal: false };
+    const data = await resp.json();
+    return {
+      replicate: Boolean(data?.serverKeys?.replicate),
+      fal: Boolean(data?.serverKeys?.fal),
+    };
+  } catch {
+    return { replicate: false, fal: false };
+  }
 }
 
 export interface GenerationResult {
@@ -369,9 +389,6 @@ export async function verifySeedanceApiKey(
   apiKey: string
 ): Promise<SeedanceKeyStatus> {
   const cleaned = apiKey.trim();
-  if (!cleaned) {
-    return { valid: false, error: 'Paste your Replicate or fal.ai API key first.' };
-  }
   try {
     const resp = await fetchWithTimeout(
       '/api/seedance',
@@ -386,7 +403,11 @@ export async function verifySeedanceApiKey(
     if (!resp.ok || !data?.ok) {
       return { valid: false, error: data?.error || `HTTP ${resp.status}` };
     }
-    return { valid: true, account: data.account || 'Verified' };
+    return {
+      valid: true,
+      usingServerKey: Boolean(data.usingServerKey),
+      account: data.account || 'Verified',
+    };
   } catch (err) {
     return { valid: false, error: err instanceof Error ? err.message : 'Verification failed' };
   }
@@ -489,14 +510,13 @@ export async function runVideoGeneration(
   settings: EngineSettings,
   onProgress: (pct: number, phase: string) => void
 ): Promise<GenerationResult> {
-  // Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) via user's BYOK key
+  // Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) via user BYOK or encrypted Vercel server key
   if (settings.activeEngine === 'seedance-byok') {
     const apiKey = settings.seedanceApiKey.trim();
-    if (!apiKey) {
-      throw new Error('Seedance Engine selected, but no API key is saved. Open Engine Settings to paste your Replicate or fal.ai key.');
-    }
     const provider = settings.seedanceProvider;
-    const model = settings.seedanceModel || (provider === 'replicate' ? 'bytedance/seedance-2.5' : 'bytedance/seedance-2.5/text-to-video');
+    const model =
+      settings.seedanceModel ||
+      (provider === 'replicate' ? 'bytedance/seedance-2.5' : 'bytedance/seedance-2.5/text-to-video');
     onProgress(10, `Submitting ${shot.mode.toUpperCase()} to Seedance (${provider})...`);
 
     const submitResp = await fetchWithTimeout(

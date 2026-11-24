@@ -130,7 +130,13 @@ export default async function handler(req, res) {
     const body = await readJsonBody(req);
     const action = String(body.action || '');
     const provider = body.provider === 'fal' ? 'fal' : 'replicate';
-    const apiKey = String(body.apiKey || '').trim();
+    const userSuppliedKey = String(body.apiKey || '').trim();
+    const envFallbackKey =
+      provider === 'replicate'
+        ? String(process.env.REPLICATE_API_TOKEN || '').trim()
+        : String(process.env.FAL_KEY || '').trim();
+    const apiKey = userSuppliedKey || envFallbackKey;
+    const uaHeaders = { 'User-Agent': 'CabardoStudio/1.0' };
 
     if (action === 'download') {
       const dlCheck = validateSeedanceDownloadUrl(body.videoUrl);
@@ -154,7 +160,7 @@ export default async function handler(req, res) {
     if (action === 'verify') {
       if (provider === 'replicate') {
         const resp = await fetch('https://api.replicate.com/v1/account', {
-          headers: { Authorization: `Bearer ${apiKey}` },
+          headers: { Authorization: `Bearer ${apiKey}`, ...uaHeaders },
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
@@ -166,6 +172,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           ok: true,
           provider: 'replicate',
+          usingServerKey: !userSuppliedKey && Boolean(envFallbackKey),
           account: data.username || data.name || 'Replicate Account Verified',
         });
       }
@@ -176,6 +183,7 @@ export default async function handler(req, res) {
         headers: {
           Authorization: `Key ${apiKey}`,
           'Content-Type': 'application/json',
+          ...uaHeaders,
         },
         body: JSON.stringify({}),
       });
@@ -217,12 +225,21 @@ export default async function handler(req, res) {
         const mCheck = validateSeedanceModel('replicate', body.model || 'bytedance/seedance-2.5');
         if (!mCheck.ok) return res.status(400).json({ ok: false, error: mCheck.error });
 
+        const isSeedance2x =
+          mCheck.model.includes('seedance-2.5') || mCheck.model.includes('seedance-2.0');
+        const isSeedance1Pro = mCheck.model === 'bytedance/seedance-1-pro';
+        // Seedance 2.5 / 2.0 on Replicate accept "480p" or "720p"; First/Last-Frame I2V requires aspect_ratio="adaptive"
+        const effectiveRes =
+          isSeedance2x && resolution === '1080p' ? '720p' : resolution;
+        const effectiveAr = isSeedance2x && isI2V ? 'adaptive' : aspectRatio;
+
         const input = {
           prompt,
           duration: durationSec,
-          resolution,
-          aspect_ratio: aspectRatio,
-          generate_audio: generateAudio,
+          resolution: effectiveRes,
+          aspect_ratio: effectiveAr,
+          ...(!isSeedance1Pro ? { generate_audio: generateAudio } : {}),
+          ...(isSeedance2x ? { watermark: false, output_format: 'mp4' } : {}),
           ...(seed !== undefined ? { seed } : {}),
           ...(isI2V ? { image: body.startFrameDataUrl } : {}),
           ...(body.endFrameDataUrl ? { last_frame_image: body.endFrameDataUrl } : {}),
@@ -233,6 +250,7 @@ export default async function handler(req, res) {
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
+            ...uaHeaders,
           },
           body: JSON.stringify({ input }),
         });
@@ -308,7 +326,7 @@ export default async function handler(req, res) {
 
       if (provider === 'replicate') {
         const resp = await fetch(pCheck.url, {
-          headers: { Authorization: `Bearer ${apiKey}` },
+          headers: { Authorization: `Bearer ${apiKey}`, ...uaHeaders },
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
