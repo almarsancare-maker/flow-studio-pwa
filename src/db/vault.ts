@@ -201,3 +201,57 @@ export async function exportProjectManifestJson(project: Project): Promise<strin
     2
   );
 }
+
+export async function importProjectManifestJson(
+  rawJson: string
+): Promise<{ project: Project; bibleCount: number; shotCount: number }> {
+  const parsed = JSON.parse(rawJson) as {
+    schema?: string;
+    project?: Partial<Project>;
+    bible?: BibleEntry[];
+    shots?: MediaShot[];
+  };
+  if (!parsed || parsed.schema !== 'flowstudio-project-v1' || !parsed.project?.name) {
+    throw new Error('Invalid Cabardo Studio project backup JSON.');
+  }
+
+  const now = Date.now();
+  const newProjectId = `proj_imp_${now}_${Math.random().toString(36).slice(2, 6)}`;
+  const importedProject: Project = {
+    id: newProjectId,
+    name: `${parsed.project.name} (Imported)`,
+    description: parsed.project.description || '',
+    aspectRatio: parsed.project.aspectRatio || '16:9',
+    createdAt: now,
+    updatedAt: now,
+  };
+  await saveProject(importedProject);
+
+  const bibleList = Array.isArray(parsed.bible) ? parsed.bible : [];
+  for (let i = 0; i < bibleList.length; i++) {
+    const b = bibleList[i];
+    await saveBibleEntry({
+      ...b,
+      id: `bible_imp_${now}_${i}`,
+      projectId: newProjectId,
+    });
+  }
+
+  const shotList = Array.isArray(parsed.shots) ? parsed.shots : [];
+  for (let i = 0; i < shotList.length; i++) {
+    const s = shotList[i];
+    await saveShot({
+      ...s,
+      id: `shot_imp_${now}_${i}`,
+      projectId: newProjectId,
+      blobKey: undefined,
+      status: s.thumbnailDataUrl ? 'completed' : 'queued',
+    });
+  }
+
+  return {
+    project: importedProject,
+    bibleCount: bibleList.length,
+    shotCount: shotList.length,
+  };
+}

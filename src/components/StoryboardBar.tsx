@@ -5,12 +5,24 @@ import {
   Download,
   Film,
   Loader2,
+  Music,
+  Palette,
   Play,
   Plus,
+  Subtitles,
   X,
 } from 'lucide-react';
-import type { MediaShot } from '../types/studio';
-import { stitchStoryboardSequence } from '../utils/sequenceStitcher';
+import type {
+  AmbientAudioPreset,
+  CinemaLut,
+  MediaShot,
+  TransitionStyle,
+} from '../types/studio';
+import {
+  buildSrtSubtitles,
+  LUT_CSS_FILTERS,
+  stitchStoryboardSequence,
+} from '../utils/sequenceStitcher';
 
 interface StoryboardBarProps {
   clips: MediaShot[];
@@ -45,6 +57,9 @@ export function StoryboardBar({
   const [stitchStatus, setStitchStatus] = useState('');
   const [stitchPct, setStitchPct] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [lut, setLut] = useState<CinemaLut>('natural');
+  const [transition, setTransition] = useState<TransitionStyle>('crossfade');
+  const [ambientAudio, setAmbientAudio] = useState<AmbientAudioPreset>('none');
 
   const activeClip = clips[previewIndex];
   const activeUrl = activeClip
@@ -79,7 +94,7 @@ export function StoryboardBar({
   const handleExportStitched = async () => {
     setStitching(true);
     setStitchPct(5);
-    setStitchStatus('Preparing browser canvas recorder...');
+    setStitchStatus('Preparing browser cinema renderer...');
     try {
       const inputs = clips
         .map((c) => {
@@ -89,7 +104,8 @@ export function StoryboardBar({
             label: c.label,
             kind: c.kind,
             srcUrl,
-            stillDurationSec: 3,
+            stillDurationSec: c.kind === 'video' ? c.durationSec : 3,
+            subtitle: c.subtitle,
           };
         })
         .filter((x) => Boolean(x.srcUrl));
@@ -101,17 +117,20 @@ export function StoryboardBar({
         (pct, msg) => {
           setStitchPct(pct);
           setStitchStatus(msg);
-        }
+        },
+        { lut, transition, ambientAudio, burnSubtitles: true }
       );
 
       const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_sequence.${ext}`;
+      a.download = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_master.${ext}`;
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      onExportComplete(`Exported stitched sequence (${clips.length} clips, ${formatTimecode(totalSeconds)})`);
+      onExportComplete(
+        `Exported graded master (${clips.length} clips, ${formatTimecode(totalSeconds)})`
+      );
     } catch (err) {
       onExportComplete(
         `Stitch export error: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -119,6 +138,26 @@ export function StoryboardBar({
     } finally {
       setStitching(false);
     }
+  };
+
+  const handleExportSrt = () => {
+    const inputs = clips.map((c) => ({
+      id: c.id,
+      label: c.label,
+      kind: c.kind,
+      srcUrl: '',
+      stillDurationSec: c.kind === 'video' ? c.durationSec : 3,
+      subtitle: c.subtitle || c.rawPrompt.slice(0, 90),
+    }));
+    const srt = buildSrtSubtitles(inputs);
+    const blob = new Blob([srt], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_subtitles.srt`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+    onExportComplete('Exported .SRT subtitle track!');
   };
 
   return (
@@ -135,7 +174,6 @@ export function StoryboardBar({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              {/* Google Flow Signature Scenebuilder Action: Extend Cut -> */}
               <button
                 type="button"
                 data-testid="extend-storyboard-btn"
@@ -158,6 +196,18 @@ export function StoryboardBar({
                 <Play className="w-3 h-3 text-emerald-400" />
                 Play Sequence
               </button>
+
+              <button
+                type="button"
+                data-testid="export-srt-btn"
+                onClick={handleExportSrt}
+                title="Download .SRT subtitle file for Premiere / CapCut / YouTube"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+              >
+                <Subtitles className="w-3 h-3 text-sky-400" />
+                <span>.SRT</span>
+              </button>
+
               <button
                 type="button"
                 disabled={stitching}
@@ -177,6 +227,53 @@ export function StoryboardBar({
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Post-Production Cinema LUT, Transition & Ambient Audio Strip */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2 text-[11px]">
+            <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-zinc-300">
+              <Palette className="w-3 h-3 text-amber-400" />
+              <select
+                aria-label="Cinema LUT"
+                data-testid="storyboard-lut-select"
+                value={lut}
+                onChange={(e) => setLut(e.target.value as CinemaLut)}
+                className="bg-transparent outline-none cursor-pointer text-zinc-200"
+              >
+                <option value="natural" className="bg-zinc-950">LUT: Natural</option>
+                <option value="teal-orange" className="bg-zinc-950">LUT: Teal &amp; Orange</option>
+                <option value="warm-35mm" className="bg-zinc-950">LUT: 35mm Warm</option>
+                <option value="noir-bw" className="bg-zinc-950">LUT: Noir B&amp;W</option>
+                <option value="cyberpunk" className="bg-zinc-950">LUT: Cyberpunk</option>
+              </select>
+            </label>
+
+            <select
+              aria-label="Transition"
+              value={transition}
+              onChange={(e) => setTransition(e.target.value as TransitionStyle)}
+              className="px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-zinc-200 outline-none cursor-pointer"
+            >
+              <option value="crossfade" className="bg-zinc-950">Transition: Crossfade</option>
+              <option value="fade-black" className="bg-zinc-950">Transition: Fade Black</option>
+              <option value="cut" className="bg-zinc-950">Transition: Hard Cut</option>
+            </select>
+
+            <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-zinc-300">
+              <Music className="w-3 h-3 text-violet-400" />
+              <select
+                aria-label="Ambient Soundscape"
+                data-testid="storyboard-audio-select"
+                value={ambientAudio}
+                onChange={(e) => setAmbientAudio(e.target.value as AmbientAudioPreset)}
+                className="bg-transparent outline-none cursor-pointer text-zinc-200"
+              >
+                <option value="none" className="bg-zinc-950">Audio: Silent / Native</option>
+                <option value="tropical-rain" className="bg-zinc-950">Audio: Tropical Rain ($0)</option>
+                <option value="neon-drone" className="bg-zinc-950">Audio: Neon Night Drone ($0)</option>
+                <option value="warm-cinema" className="bg-zinc-950">Audio: Warm Cinema Pad ($0)</option>
+              </select>
+            </label>
           </div>
 
           {stitching && (
@@ -213,9 +310,19 @@ export function StoryboardBar({
                   <div className="relative h-16 bg-zinc-950">
                     {thumb ? (
                       clip.kind === 'video' && !clip.thumbnailDataUrl ? (
-                        <video src={thumb} muted className="w-full h-full object-cover" />
+                        <video
+                          src={thumb}
+                          muted
+                          style={{ filter: LUT_CSS_FILTERS[lut] }}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
-                        <img src={thumb} alt={clip.label} className="w-full h-full object-cover" />
+                        <img
+                          src={thumb}
+                          alt={clip.label}
+                          style={{ filter: LUT_CSS_FILTERS[lut] }}
+                          className="w-full h-full object-cover"
+                        />
                       )
                     ) : null}
                     <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded-full bg-black/75 text-[10px] font-mono text-amber-300">
@@ -283,13 +390,14 @@ export function StoryboardBar({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="bg-black aspect-video flex items-center justify-center">
+            <div className="bg-black aspect-video flex items-center justify-center relative">
               {activeClip.kind === 'video' ? (
                 <video
                   key={activeClip.id}
                   src={activeUrl}
                   autoPlay
                   controls
+                  style={{ filter: LUT_CSS_FILTERS[lut] }}
                   onEnded={() =>
                     setPreviewIndex((idx) => (idx + 1 < clips.length ? idx + 1 : 0))
                   }
@@ -300,8 +408,14 @@ export function StoryboardBar({
                   key={activeClip.id}
                   src={activeUrl}
                   alt={activeClip.label}
+                  style={{ filter: LUT_CSS_FILTERS[lut] }}
                   className="w-full h-full object-contain"
                 />
+              )}
+              {activeClip.subtitle && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-xl bg-black/75 text-sm font-medium text-zinc-100 max-w-[85%] text-center">
+                  {activeClip.subtitle}
+                </div>
               )}
             </div>
             <div className="px-4 py-2.5 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">

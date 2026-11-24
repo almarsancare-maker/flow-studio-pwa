@@ -8,16 +8,19 @@ import {
   Film,
   Image as ImageIcon,
   ImagePlus,
+  Loader2,
   Lock,
   SlidersHorizontal,
   Sparkles,
   Unlock,
   Volume2,
+  Wand2,
   X,
 } from 'lucide-react';
 import type { AspectRatio, BibleEntry, EngineSettings, GenerationMode } from '../types/studio';
 import { compilePromptWithBible } from '../utils/promptCompiler';
 import { fileToResizedDataUrl } from '../utils/frameGrabber';
+import { enhancePromptWithDirector } from '../services/director';
 
 export interface ComposerSubmitPayload {
   rawPrompt: string;
@@ -97,6 +100,7 @@ export function FloatingComposer({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCameraBar, setShowCameraBar] = useState(false);
   const [showExpandedPreview, setShowExpandedPreview] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
 
   const startInputRef = useRef<HTMLInputElement | null>(null);
   const endInputRef = useRef<HTMLInputElement | null>(null);
@@ -156,6 +160,19 @@ export function FloatingComposer({
   const appendTag = (tag: string) => {
     const spacer = prompt.trim().length > 0 && !prompt.endsWith(' ') ? ' ' : '';
     onPromptChange(`${prompt}${spacer}${tag} `);
+  };
+
+  const handleEnhance = async () => {
+    if (!prompt.trim() || enhancing) return;
+    setEnhancing(true);
+    try {
+      const res = await enhancePromptWithDirector(prompt, mode);
+      onPromptChange(res.enhanced);
+    } catch {
+      // keep existing prompt
+    } finally {
+      setEnhancing(false);
+    }
   };
 
   const isSeedanceVideo = mode !== 't2i' && engineSettings.activeEngine === 'seedance-byok';
@@ -497,6 +514,23 @@ export function FloatingComposer({
                   <option value={10}>10s (Seedance)</option>
                 </select>
               )}
+
+              {/* 1-Click Magic Cinema Enhance ($0 AI Director) */}
+              <button
+                type="button"
+                data-testid="magic-enhance-btn"
+                disabled={!prompt.trim() || enhancing}
+                onClick={() => void handleEnhance()}
+                title="Expand your prompt into Hollywood 35mm cinematography while keeping @TAGs intact ($0)"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border bg-amber-500/12 border-amber-500/30 text-amber-200 hover:bg-amber-500/22 disabled:opacity-40 transition"
+              >
+                {enhancing ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Wand2 className="w-3 h-3 text-amber-400" />
+                )}
+                <span>Enhance</span>
+              </button>
 
               {/* Camera Motion Presets Toggle */}
               <button

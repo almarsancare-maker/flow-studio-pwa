@@ -22,20 +22,6 @@ export interface ServerKeyCapabilities {
   fal: boolean;
 }
 
-export async function fetchServerCapabilities(): Promise<ServerKeyCapabilities> {
-  try {
-    const resp = await fetchWithTimeout('/api/health', {}, 8_000);
-    if (!resp.ok) return { replicate: false, fal: false };
-    const data = await resp.json();
-    return {
-      replicate: Boolean(data?.serverKeys?.replicate),
-      fal: Boolean(data?.serverKeys?.fal),
-    };
-  } catch {
-    return { replicate: false, fal: false };
-  }
-}
-
 export interface GenerationResult {
   blob: Blob;
   mimeType: string;
@@ -46,6 +32,11 @@ export interface GenerationResult {
 
 const HF_FLUX_HOST = 'https://black-forest-labs-flux-1-schnell.hf.space';
 const HF_LTX_HOST = 'https://lightricks-ltx-video-distilled.hf.space';
+const HF_WAN22_I2V_HOST = 'https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space';
+const HF_WAN22_FLF_HOST = 'https://multimodalart-wan-2-2-first-last-frame.hf.space';
+
+const WAN_DEFAULT_NEG =
+  'worst quality, low quality, blurry, jittery, distorted, static, deformed hands, watermark, text, subtitles';
 
 function dataUrlToBlob(dataUrl: string): { blob: Blob; mimeType: string } {
   const [header, b64] = dataUrl.split(',');
@@ -126,9 +117,55 @@ async function readGradioSseComplete(
   throw new Error('Gradio SSE closed before completion');
 }
 
-/**
- * Browser-direct HF FLUX.1-schnell (uses the user's own clean ZeroGPU quota, bypassing Vercel shared-IP limits).
- */
+async function uploadDataUrlToGradio(
+  host: string,
+  dataUrl: string,
+  prefix = 'frame'
+): Promise<{
+  path: string;
+  url: string;
+  orig_name: string;
+  mime_type: string;
+  is_stream: boolean;
+  meta: { _type: string };
+}> {
+  const { blob, mimeType } = dataUrlToBlob(dataUrl);
+  const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+  const filename = `${prefix}.${ext}`;
+  const form = new FormData();
+  form.append('files', blob, filename);
+
+  const upResp = await fetchWithTimeout(
+    `${host}/gradio_api/upload`,
+    { method: 'POST', body: form },
+    20_000
+  );
+  if (!upResp.ok) throw new Error(`Gradio upload HTTP ${upResp.status}`);
+  const paths = (await upResp.json()) as string[];
+  if (!Array.isArray(paths) || !paths[0]) throw new Error('Gradio upload returned no path');
+  return {
+    path: paths[0],
+    url: `${host}/gradio_api/file=${paths[0]}`,
+    orig_name: filename,
+    mime_type: mimeType,
+    is_stream: false,
+    meta: { _type: 'gradio.FileData' },
+  };
+}
+
+function extractGradioVideoUrl(parsed: unknown, host: string): string | null {
+  const arr = Array.isArray(parsed) ? parsed : [parsed];
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as { video?: { url?: string; path?: string }; url?: string; path?: string };
+    const v = obj.video || obj;
+    if (v?.url) return v.url;
+    if (v?.path) return `${host}/gradio_api/file=${v.path}`;
+  }
+  return null;
+}
+
+// ── Free Image Generators (Browser-Direct Cascade) ────────────────────
 async function generateImageViaDirectHfFlux(
   prompt: string,
   width: number,
@@ -174,9 +211,6 @@ async function generateImageViaDirectHfFlux(
   };
 }
 
-/**
- * Browser-direct Pollinations image generation (CORS Access-Control-Allow-Origin: *).
- */
 async function generateImageViaDirectPollinations(
   prompt: string,
   width: number,
@@ -206,9 +240,6 @@ async function generateImageViaDirectPollinations(
   };
 }
 
-/**
- * Server fallback via Vercel /api/image (in case browser extensions block third-party domains).
- */
 async function generateImageViaServerApi(
   prompt: string,
   width: number,
@@ -251,26 +282,26 @@ async function generateFreeImageCascade(
 
   if (model === 'turbo') {
     try {
-      onProgress(25, 'Rendering fast keyframe via Pollinations Turbo (Direct)...');
+      onProgress(25, 'Rendering fast keyframe via Pollinations Turbo...');
       return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'Pollinations turbo failed');
     }
     try {
-      onProgress(55, 'Switching to HF FLUX.1-schnell ZeroGPU (Direct)...');
+      onProgress(55, 'Switching to HF FLUX.1-schnell ZeroGPU...');
       return await generateImageViaDirectHfFlux(prompt, width, height, seed);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
     }
   } else {
     try {
-      onProgress(25, 'Rendering HD keyframe via HF FLUX.1-schnell ZeroGPU (Direct)...');
+      onProgress(25, 'Rendering HD keyframe via HF FLUX.1-schnell ZeroGPU...');
       return await generateImageViaDirectHfFlux(prompt, width, height, seed);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'HF FLUX failed');
     }
     try {
-      onProgress(55, 'Switching to Pollinations FLUX (Direct)...');
+      onProgress(55, 'Switching to Pollinations FLUX...');
       return await generateImageViaDirectPollinations(prompt, width, height, seed, 'flux');
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'Pollinations flux failed');
@@ -287,9 +318,132 @@ async function generateFreeImageCascade(
   throw new Error(`All $0 image providers failed (${errors.join(' | ')})`);
 }
 
-/**
- * Browser-direct HF Lightricks/ltx-video-distilled (real AI-diffused MP4 in ~8-15s on user's clean ZeroGPU IP!).
- */
+// ── Multi-Space $0 AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video) ──
+async function generateVideoViaWan22FirstLastFrame(
+  shot: MediaShot,
+  startFrame: string,
+  endFrame: string,
+  onProgress: (pct: number, phase: string) => void
+): Promise<GenerationResult> {
+  onProgress(20, 'Uploading Start & End frames to Free Wan 2.2 14B (ZeroGPU)...');
+  const [startFile, endFile] = await Promise.all([
+    uploadDataUrlToGradio(HF_WAN22_FLF_HOST, startFrame, 'start'),
+    uploadDataUrlToGradio(HF_WAN22_FLF_HOST, endFrame, 'end'),
+  ]);
+
+  onProgress(35, 'Morphing Start → End Frame on Wan 2.2 14B ($0 ZeroGPU)...');
+  const dur = Math.max(2.1, Math.min(5.0, shot.durationSec || 3.5));
+  const submit = await fetchWithTimeout(
+    `${HF_WAN22_FLF_HOST}/gradio_api/call/generate_video`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [
+          startFile,
+          endFile,
+          shot.compiledPrompt,
+          shot.negativePrompt || WAN_DEFAULT_NEG,
+          dur,
+          6,
+          1.0,
+          1.0,
+          shot.seed,
+          false,
+        ],
+      }),
+    },
+    20_000
+  );
+  if (!submit.ok) throw new Error(`Wan 2.2 FLF submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('Wan 2.2 FLF missing event_id');
+
+  let tick = 42;
+  const parsed = await readGradioSseComplete(
+    `${HF_WAN22_FLF_HOST}/gradio_api/call/generate_video/${eventId}`,
+    90_000,
+    () => {
+      tick = Math.min(88, tick + 6);
+      onProgress(tick, 'Diffusing Wan 2.2 14B First→Last Frame ($0 ZeroGPU)...');
+    }
+  );
+  const videoUrl = extractGradioVideoUrl(parsed, HF_WAN22_FLF_HOST);
+  if (!videoUrl) throw new Error('Wan 2.2 FLF returned no video URL');
+
+  onProgress(94, 'Caching Wan 2.2 MP4 into IndexedDB Vault...');
+  const vidResp = await fetchWithTimeout(videoUrl, {}, 30_000);
+  if (!vidResp.ok) throw new Error(`Wan 2.2 FLF MP4 HTTP ${vidResp.status}`);
+  const blob = await vidResp.blob();
+  return {
+    blob,
+    mimeType: blob.type || 'video/mp4',
+    providerLabel: 'Wan 2.2 14B First→Last ($0 ZeroGPU)',
+    seed: shot.seed,
+    thumbnailDataUrl: startFrame,
+  };
+}
+
+async function generateVideoViaWan22Fast(
+  shot: MediaShot,
+  keyframeDataUrl: string,
+  onProgress: (pct: number, phase: string) => void
+): Promise<GenerationResult> {
+  onProgress(28, 'Uploading keyframe to Free Wan 2.2 14B FP8 Lightning...');
+  const imgFile = await uploadDataUrlToGradio(HF_WAN22_I2V_HOST, keyframeDataUrl, 'start');
+  const dur = Math.max(2.0, Math.min(5.0, shot.durationSec || 3.5));
+
+  onProgress(40, 'Diffusing Wan 2.2 14B FP8 6-step video ($0 ZeroGPU)...');
+  const submit = await fetchWithTimeout(
+    `${HF_WAN22_I2V_HOST}/gradio_api/call/generate_video`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [
+          imgFile,
+          shot.compiledPrompt,
+          6,
+          shot.negativePrompt || WAN_DEFAULT_NEG,
+          dur,
+          1,
+          1,
+          shot.seed,
+          false,
+        ],
+      }),
+    },
+    20_000
+  );
+  if (!submit.ok) throw new Error(`Wan 2.2 FP8 submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('Wan 2.2 FP8 missing event_id');
+
+  let tick = 48;
+  const parsed = await readGradioSseComplete(
+    `${HF_WAN22_I2V_HOST}/gradio_api/call/generate_video/${eventId}`,
+    90_000,
+    () => {
+      tick = Math.min(88, tick + 6);
+      onProgress(tick, 'Diffusing Wan 2.2 14B cinema frames ($0 ZeroGPU)...');
+    }
+  );
+  const videoUrl = extractGradioVideoUrl(parsed, HF_WAN22_I2V_HOST);
+  if (!videoUrl) throw new Error('Wan 2.2 FP8 returned no video URL');
+
+  onProgress(94, 'Caching Wan 2.2 14B MP4 into IndexedDB Vault...');
+  const vidResp = await fetchWithTimeout(videoUrl, {}, 30_000);
+  if (!vidResp.ok) throw new Error(`Wan 2.2 FP8 MP4 HTTP ${vidResp.status}`);
+  const blob = await vidResp.blob();
+  return {
+    blob,
+    mimeType: blob.type || 'video/mp4',
+    providerLabel: 'Wan 2.2 14B FP8 ($0 ZeroGPU)',
+    seed: shot.seed,
+    thumbnailDataUrl: keyframeDataUrl,
+  };
+}
+
 async function generateVideoViaDirectHfLtx(
   shot: MediaShot,
   onProgress: (pct: number, phase: string) => void
@@ -299,22 +453,10 @@ async function generateVideoViaDirectHfLtx(
     typeof shot.startFrameDataUrl === 'string' &&
     shot.startFrameDataUrl.startsWith('data:image/');
 
-  let uploadedImage: { path: string; meta: { _type: string } } | null = null;
+  let uploadedImage = null;
   if (isI2V && shot.startFrameDataUrl) {
-    onProgress(16, 'Uploading Start Frame to HF LTX-Video ZeroGPU...');
-    const { blob, mimeType } = dataUrlToBlob(shot.startFrameDataUrl);
-    const ext = mimeType.includes('png') ? 'png' : 'jpg';
-    const form = new FormData();
-    form.append('files', blob, `start_frame.${ext}`);
-    const upResp = await fetchWithTimeout(
-      `${HF_LTX_HOST}/gradio_api/upload`,
-      { method: 'POST', body: form },
-      20_000
-    );
-    if (!upResp.ok) throw new Error(`LTX upload HTTP ${upResp.status}`);
-    const paths = (await upResp.json()) as string[];
-    if (!Array.isArray(paths) || !paths[0]) throw new Error('LTX upload returned no file path');
-    uploadedImage = { path: paths[0], meta: { _type: 'gradio.FileData' } };
+    onProgress(52, 'Uploading Start Frame to HF LTX-Video ZeroGPU...');
+    uploadedImage = await uploadDataUrlToGradio(HF_LTX_HOST, shot.startFrameDataUrl, 'start');
   }
 
   const endpoint = isI2V ? 'image_to_video' : 'text_to_video';
@@ -322,7 +464,7 @@ async function generateVideoViaDirectHfLtx(
   const height = Math.max(384, Math.min(768, Math.round(shot.height / 32) * 32));
   const durationSec = Math.max(2, Math.min(5, Math.round(shot.durationSec || 3)));
 
-  onProgress(28, `Diffusing AI video on HF LTX-Video ZeroGPU (${isI2V ? 'I2V' : 'T2V'})...`);
+  onProgress(58, `Diffusing AI video on HF LTX-Video ZeroGPU (${isI2V ? 'I2V' : 'T2V'})...`);
   const submit = await fetchWithTimeout(
     `${HF_LTX_HOST}/gradio_api/call/${endpoint}`,
     {
@@ -331,7 +473,7 @@ async function generateVideoViaDirectHfLtx(
       body: JSON.stringify({
         data: [
           shot.compiledPrompt,
-          shot.negativePrompt || 'worst quality, inconsistent motion, blurry, jittery, distorted',
+          shot.negativePrompt || WAN_DEFAULT_NEG,
           uploadedImage,
           null,
           height,
@@ -352,24 +494,20 @@ async function generateVideoViaDirectHfLtx(
   const { event_id: eventId } = (await submit.json()) as { event_id?: string };
   if (!eventId) throw new Error('LTX missing event_id');
 
-  let tick = 35;
+  let tick = 64;
   const parsed = await readGradioSseComplete(
     `${HF_LTX_HOST}/gradio_api/call/${endpoint}/${eventId}`,
     75_000,
     () => {
-      tick = Math.min(86, tick + 6);
+      tick = Math.min(88, tick + 5);
       onProgress(tick, 'Diffusing motion frames on HF LTX-Video ZeroGPU...');
     }
   );
 
-  const arr = Array.isArray(parsed) ? parsed : [];
-  const first = arr[0] as { video?: { url?: string; path?: string }; url?: string; path?: string } | undefined;
-  const vidObj = first?.video || first;
-  const videoUrl =
-    vidObj?.url || (vidObj?.path ? `${HF_LTX_HOST}/gradio_api/file=${vidObj.path}` : null);
+  const videoUrl = extractGradioVideoUrl(parsed, HF_LTX_HOST);
   if (!videoUrl) throw new Error('LTX completed without video URL');
 
-  onProgress(92, 'Downloading AI-diffused MP4 into local Vault...');
+  onProgress(93, 'Downloading LTX-Video MP4 into local Vault...');
   const vidResp = await fetchWithTimeout(videoUrl, {}, 30_000);
   if (!vidResp.ok) throw new Error(`LTX MP4 download HTTP ${vidResp.status}`);
   const blob = await vidResp.blob();
@@ -378,10 +516,25 @@ async function generateVideoViaDirectHfLtx(
   return {
     blob,
     mimeType: blob.type || 'video/mp4',
-    providerLabel: `HF LTX-Video ZeroGPU (${isI2V ? 'I2V' : 'T2V'})`,
-    seed: typeof arr[1] === 'number' ? arr[1] : shot.seed,
+    providerLabel: `HF LTX-Video ($0 ZeroGPU ${isI2V ? 'I2V' : 'T2V'})`,
+    seed: shot.seed,
     thumbnailDataUrl: shot.startFrameDataUrl,
   };
+}
+
+// ── Public Service API ────────────────────────────────────────────────
+export async function fetchServerCapabilities(): Promise<ServerKeyCapabilities> {
+  try {
+    const resp = await fetchWithTimeout('/api/health', {}, 8_000);
+    if (!resp.ok) return { replicate: false, fal: false };
+    const data = await resp.json();
+    return {
+      replicate: Boolean(data?.serverKeys?.replicate),
+      fal: Boolean(data?.serverKeys?.fal),
+    };
+  } catch {
+    return { replicate: false, fal: false };
+  }
 }
 
 export async function verifySeedanceApiKey(
@@ -510,13 +663,15 @@ export async function runVideoGeneration(
   settings: EngineSettings,
   onProgress: (pct: number, phase: string) => void
 ): Promise<GenerationResult> {
-  // Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) via user BYOK or encrypted Vercel server key
+  // Engine 3: Official ByteDance Seedance (Latest 2.5 / 2.0 / 1.5 Pro) — with automatic $0 fallback on HTTP 402!
   if (settings.activeEngine === 'seedance-byok') {
     const apiKey = settings.seedanceApiKey.trim();
     const provider = settings.seedanceProvider;
     const model =
       settings.seedanceModel ||
-      (provider === 'replicate' ? 'bytedance/seedance-2.5' : 'bytedance/seedance-2.5/text-to-video');
+      (provider === 'replicate'
+        ? 'bytedance/seedance-2.5'
+        : 'bytedance/seedance-2.5/text-to-video');
     onProgress(10, `Submitting ${shot.mode.toUpperCase()} to Seedance (${provider})...`);
 
     const submitResp = await fetchWithTimeout(
@@ -543,63 +698,68 @@ export async function runVideoGeneration(
       25_000
     );
     const submitData = await submitResp.json();
-    if (!submitResp.ok || !submitData?.ok || !submitData?.pollUrl) {
-      throw new Error(submitData?.error || `Seedance submit failed (HTTP ${submitResp.status})`);
-    }
 
-    for (let attempt = 0; attempt < 150; attempt++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const pollResp = await fetchWithTimeout(
-        '/api/seedance',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'poll',
-            provider,
-            apiKey,
-            pollUrl: submitData.pollUrl,
-            responseUrl: submitData.responseUrl,
-          }),
-        },
-        20_000
-      );
-      const poll = await pollResp.json();
-      if (poll.status === 'failed') {
-        throw new Error(poll.error || 'Seedance generation failed');
-      }
-      onProgress(
-        Math.min(92, Math.max(18, Number(poll.progress) || 20 + attempt * 2)),
-        poll.phase || 'Diffusing cinema video on Seedance...'
-      );
-      if (poll.status === 'completed' && poll.videoUrl) {
-        onProgress(95, 'Saving Seedance MP4 permanently into local IndexedDB Vault...');
-        const dlResp = await fetchWithTimeout(
+    // If Replicate/fal returns HTTP 402 (no paid credits), gracefully auto-fallback to $0 Wan 2.2 Cascade!
+    if (submitResp.status === 402) {
+      onProgress(15, 'Seedance billing credit empty — auto-falling back to $0 Wan 2.2 14B Cascade...');
+    } else if (!submitResp.ok || !submitData?.ok || !submitData?.pollUrl) {
+      throw new Error(submitData?.error || `Seedance submit failed (HTTP ${submitResp.status})`);
+    } else {
+      for (let attempt = 0; attempt < 150; attempt++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const pollResp = await fetchWithTimeout(
           '/api/seedance',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'download', videoUrl: poll.videoUrl }),
+            body: JSON.stringify({
+              action: 'poll',
+              provider,
+              apiKey,
+              pollUrl: submitData.pollUrl,
+              responseUrl: submitData.responseUrl,
+            }),
           },
-          45_000
+          20_000
         );
-        if (!dlResp.ok) throw new Error(`Seedance MP4 download HTTP ${dlResp.status}`);
-        const blob = await dlResp.blob();
-        const shortModel = model.replace(/^fal-ai\//, '').replace(/^bytedance\//, '');
-        return {
-          blob,
-          mimeType: blob.type || 'video/mp4',
-          providerLabel: `Seedance (${shortModel} · ${settings.seedanceResolution}${settings.seedanceAudio ? ' + Audio' : ''})`,
-          seed: shot.seed,
-          thumbnailDataUrl: shot.startFrameDataUrl,
-        };
+        const poll = await pollResp.json();
+        if (poll.status === 'failed') {
+          throw new Error(poll.error || 'Seedance generation failed');
+        }
+        onProgress(
+          Math.min(92, Math.max(18, Number(poll.progress) || 20 + attempt * 2)),
+          poll.phase || 'Diffusing cinema video on Seedance...'
+        );
+        if (poll.status === 'completed' && poll.videoUrl) {
+          onProgress(95, 'Saving Seedance MP4 permanently into local IndexedDB Vault...');
+          const dlResp = await fetchWithTimeout(
+            '/api/seedance',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'download', videoUrl: poll.videoUrl }),
+            },
+            45_000
+          );
+          if (!dlResp.ok) throw new Error(`Seedance MP4 download HTTP ${dlResp.status}`);
+          const blob = await dlResp.blob();
+          const shortModel = model.replace(/^fal-ai\//, '').replace(/^bytedance\//, '');
+          return {
+            blob,
+            mimeType: blob.type || 'video/mp4',
+            providerLabel: `Seedance (${shortModel} · ${settings.seedanceResolution}${
+              settings.seedanceAudio ? ' + Audio' : ''
+            })`,
+            seed: shot.seed,
+            thumbnailDataUrl: shot.startFrameDataUrl,
+          };
+        }
       }
+      throw new Error('Seedance render timed out after 7.5 minutes.');
     }
-    throw new Error('Seedance render timed out after 7.5 minutes.');
   }
 
   const useColab = settings.activeEngine === 'colab-t4' && settings.colabUrl.trim().length > 0;
-
   if (useColab) {
     const colabUrl = settings.colabUrl.trim().replace(/\/+$/, '');
     onProgress(10, `Submitting ${shot.mode.toUpperCase()} to Colab T4 (${settings.colabModelVideo})...`);
@@ -635,7 +795,9 @@ export async function runVideoGeneration(
     for (let attempt = 0; attempt < 180; attempt++) {
       await new Promise((r) => setTimeout(r, 3000));
       const pollResp = await fetchWithTimeout(
-        `/api/video?provider=colab-t4&taskId=${encodeURIComponent(taskId)}&colabUrl=${encodeURIComponent(colabUrl)}`,
+        `/api/video?provider=colab-t4&taskId=${encodeURIComponent(taskId)}&colabUrl=${encodeURIComponent(
+          colabUrl
+        )}`,
         {},
         15_000
       );
@@ -650,7 +812,9 @@ export async function runVideoGeneration(
       if (poll.status === 'completed' && poll.output_path) {
         onProgress(95, 'Downloading MP4 from Colab T4 into local Vault...');
         const fileResp = await fetchWithTimeout(
-          `/api/proxy?colabUrl=${encodeURIComponent(colabUrl)}&path=${encodeURIComponent(poll.output_path)}`,
+          `/api/proxy?colabUrl=${encodeURIComponent(colabUrl)}&path=${encodeURIComponent(
+            poll.output_path
+          )}`,
           {},
           45_000
         );
@@ -668,20 +832,62 @@ export async function runVideoGeneration(
     throw new Error('Colab T4 video render timed out after 9 minutes.');
   }
 
-  // Engine 1: Free 24/7 Cloud Video — Browser-direct HF LTX-Video ZeroGPU first (real AI MP4 in ~8-15s!)
+  // Engine 1: Multi-Space $0 AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video -> Director Cinema Motion)
+  let keyframeDataUrl = shot.startFrameDataUrl;
+  let actualSeed = shot.seed;
+
   if (settings.freeVideoFallback === 'hf-ltx-space') {
+    // Path A: Both Start Frame & End Frame provided -> Free Wan 2.2 14B First-to-Last Frame Morph!
+    if (keyframeDataUrl && shot.endFrameDataUrl) {
+      try {
+        return await generateVideoViaWan22FirstLastFrame(
+          shot,
+          keyframeDataUrl,
+          shot.endFrameDataUrl,
+          onProgress
+        );
+      } catch {
+        // Fall through to Wan 2.2 FP8 single-frame
+      }
+    }
+
+    // Path B: Ensure crisp $0 HD keyframe exists, then animate via Wan 2.2 14B FP8 Lightning (closest $0 quality to Seedance!)
+    if (!keyframeDataUrl) {
+      try {
+        onProgress(14, 'Stage 1/2: Generating $0 FLUX keyframe for Wan 2.2 14B...');
+        const still = await generateFreeImageCascade(
+          shot.compiledPrompt,
+          shot.width >= shot.height ? 1024 : 576,
+          shot.width >= shot.height ? 576 : 1024,
+          shot.seed,
+          settings.freeImageModel,
+          onProgress
+        );
+        keyframeDataUrl = still.dataUrl;
+        actualSeed = still.seed;
+      } catch {
+        // Try pure LTX T2V if keyframe failed
+      }
+    }
+
+    if (keyframeDataUrl) {
+      try {
+        return await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress);
+      } catch {
+        // Cascade to HF LTX-Video Distilled
+      }
+    }
+
     try {
       return await generateVideoViaDirectHfLtx(shot, onProgress);
     } catch {
-      // Gracefully fall through to 2-Stage Keyframe + Local Cinema Motion
+      // Guaranteed zero-wait fallback below
     }
   }
 
-  // Guaranteed $0 zero-wait fallback: Keyframe + Smooth Cinematic Motion Pass
-  let keyframeDataUrl = shot.startFrameDataUrl;
-  let actualSeed = shot.seed;
+  // Guaranteed $0 zero-wait fallback: Keyframe + Director-Aware Camera Motion + End-Frame Morph
   if (!keyframeDataUrl) {
-    onProgress(35, 'ZeroGPU busy — generating $0 HD Keyframe (Stage 1/2)...');
+    onProgress(35, 'Generating $0 HD Keyframe (Stage 1/2)...');
     const still = await generateFreeImageCascade(
       shot.compiledPrompt,
       shot.width >= shot.height ? 1024 : 576,
@@ -694,18 +900,20 @@ export async function runVideoGeneration(
     actualSeed = still.seed;
   }
 
-  onProgress(72, 'Synthesizing smooth cinema motion clip in-browser (Stage 2/2)...');
+  onProgress(76, 'Synthesizing Director-Aware cinema camera motion in-browser (Stage 2/2)...');
   const motionBlob = await renderLocalMotionClipFromImage(
     keyframeDataUrl,
     shot.width,
     shot.height,
-    Math.min(Math.max(shot.durationSec, 2), 6)
+    Math.min(Math.max(shot.durationSec, 2), 6),
+    shot.rawPrompt,
+    shot.endFrameDataUrl
   );
   onProgress(98, 'Saving video clip into IndexedDB Vault...');
   return {
     blob: motionBlob,
     mimeType: motionBlob.type || 'video/webm',
-    providerLabel: 'Free 2-Stage Motion (ZeroGPU busy — retry or connect Colab T4)',
+    providerLabel: 'Director Cinema Motion ($0 Fallback · ZeroGPU Busy)',
     seed: actualSeed,
     thumbnailDataUrl: keyframeDataUrl,
   };

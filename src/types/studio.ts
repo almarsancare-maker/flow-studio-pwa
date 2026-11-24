@@ -3,6 +3,9 @@ export type AspectRatio = '16:9' | '9:16' | '1:1' | '21:9';
 export type EngineId = 'free-24-7' | 'colab-t4' | 'seedance-byok';
 export type SeedanceProvider = 'replicate' | 'fal';
 export type SeedanceResolution = '480p' | '720p' | '1080p';
+export type CinemaLut = 'natural' | 'teal-orange' | 'warm-35mm' | 'noir-bw' | 'cyberpunk';
+export type TransitionStyle = 'cut' | 'crossfade' | 'fade-black';
+export type AmbientAudioPreset = 'none' | 'tropical-rain' | 'neon-drone' | 'warm-cinema';
 export type BibleCategory = 'character' | 'location' | 'prop' | 'style';
 export type ShotStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -55,6 +58,7 @@ export interface MediaShot {
   thumbnailDataUrl?: string;
   startFrameDataUrl?: string;
   endFrameDataUrl?: string;
+  subtitle?: string;
   externalTaskId?: string;
   storyboardOrder: number | null;
   error?: string;
@@ -90,6 +94,7 @@ export interface ParsedScriptShot {
   aspectRatio?: AspectRatio;
   durationSec?: number;
   mode: GenerationMode;
+  subtitle?: string;
   detectedTags: string[];
 }
 

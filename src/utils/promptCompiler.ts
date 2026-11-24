@@ -144,6 +144,13 @@ export function parseScriptShotList(
         prompt = prompt.replace(modeMatch[0], '').trim();
       }
 
+      let subtitle: string | undefined;
+      const subMatch = prompt.match(/\[sub:\s*["']?([^\]"']+)["']?\s*\]/i);
+      if (subMatch) {
+        subtitle = subMatch[1].trim();
+        prompt = prompt.replace(subMatch[0], '').trim();
+      }
+
       const detectedTags = Array.from(
         new Set((prompt.match(/@[A-Za-z0-9_-]+/g) || []).map((t) => normalizeTag(t)))
       );
@@ -154,6 +161,7 @@ export function parseScriptShotList(
         aspectRatio,
         durationSec,
         mode,
+        subtitle,
         detectedTags,
       };
     });

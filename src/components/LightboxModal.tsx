@@ -9,6 +9,7 @@ interface LightboxModalProps {
   onClose: () => void;
   onInjectStartFrame: (dataUrl: string, sourceLabel: string) => void;
   onInjectEndFrame: (dataUrl: string, sourceLabel: string) => void;
+  onUpdateSubtitle: (shot: MediaShot, subtitle: string) => void;
   onDownload: (shot: MediaShot) => void;
 }
 
@@ -18,6 +19,7 @@ export function LightboxModal({
   onClose,
   onInjectStartFrame,
   onInjectEndFrame,
+  onUpdateSubtitle,
   onDownload,
 }: LightboxModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -211,6 +213,21 @@ export function LightboxModal({
               <p className="text-[11px] text-zinc-400 leading-relaxed">{shot.negativePrompt}</p>
             </div>
           )}
+
+          {/* Per-Shot Subtitle / Caption (burned into Storyboard export + .SRT) */}
+          <div className="space-y-1.5 pt-2 border-t border-zinc-800">
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              Scene Subtitle / Caption (Burned into Export + .SRT)
+            </label>
+            <input
+              type="text"
+              data-testid="lightbox-subtitle-input"
+              value={shot.subtitle ?? ''}
+              onChange={(e) => onUpdateSubtitle(shot, e.target.value)}
+              placeholder='e.g. "Midnight in Manila — the rain never stops."'
+              className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus:border-amber-500/50 outline-none"
+            />
+          </div>
         </div>
       </div>
     </div>

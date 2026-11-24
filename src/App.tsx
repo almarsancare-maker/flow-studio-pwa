@@ -5,6 +5,7 @@ import {
   deleteShot,
   exportProjectManifestJson,
   getVaultUsageBytes,
+  importProjectManifestJson,
   listProjectBible,
   listProjectShots,
   listProjects,
@@ -177,28 +178,14 @@ export default function App() {
       async ([{ projects: loadedProjects, settings: loadedSettings }, caps]) => {
         if (!active) return;
         setServerKeys(caps);
-
-        let effectiveSettings = loadedSettings;
-        const userPicked = window.localStorage.getItem('cabardo_engine_user_set');
-        if (!userPicked && (caps.replicate || caps.fal) && loadedSettings.activeEngine === 'free-24-7') {
-          effectiveSettings = {
-            ...loadedSettings,
-            activeEngine: 'seedance-byok',
-            seedanceProvider: caps.replicate ? 'replicate' : 'fal',
-            seedanceModel: caps.replicate
-              ? 'bytedance/seedance-2.5'
-              : 'bytedance/seedance-2.5/text-to-video',
-          };
-          await saveEngineSettings(effectiveSettings);
-        }
-
-        setEngineSettings(effectiveSettings);
+        // Always default to 100% Free 24/7 Cloud ($0 Wan 2.2 14B + FLUX Cascade) unless user explicitly picks another engine
+        setEngineSettings(loadedSettings);
         setProjects(loadedProjects);
         const savedId = window.localStorage.getItem('flowstudio_active_project');
         const matched = loadedProjects.find((p) => p.id === savedId);
         setActiveProjectId(matched ? matched.id : loadedProjects[0].id);
-        if (effectiveSettings.activeEngine === 'colab-t4' && effectiveSettings.colabUrl.trim()) {
-          void pingColabBackend(effectiveSettings.colabUrl).then((health) => {
+        if (loadedSettings.activeEngine === 'colab-t4' && loadedSettings.colabUrl.trim()) {
+          void pingColabBackend(loadedSettings.colabUrl).then((health) => {
             if (active) setColabHealth(health);
           });
         }
@@ -507,6 +494,7 @@ export default function App() {
         engine: engineSettings.activeEngine,
         model: kind === 'image' ? 'Queued Image' : 'Queued Video',
         startFrameDataUrl: item.mode === 'i2v' ? compiled.suggestedRefImage : undefined,
+        subtitle: item.subtitle,
         storyboardOrder: null,
         createdAt: baseTime + i,
       };
@@ -663,6 +651,19 @@ export default function App() {
     showToast('Exported portable Project + Bible JSON backup!');
   };
 
+  const handleImportProjectJson = async (rawJson: string) => {
+    try {
+      const res = await importProjectManifestJson(rawJson);
+      setProjects((prev) => [res.project, ...prev]);
+      setActiveProjectId(res.project.id);
+      showToast(
+        `Imported "${res.project.name}" (${res.bibleCount} Bible tags, ${res.shotCount} shots)`
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Invalid project backup JSON');
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#09090b] text-zinc-100">
       <TopBar
@@ -685,6 +686,7 @@ export default function App() {
         onOpenScriptImport={() => setScriptOpen(true)}
         onOpenEngine={() => setEngineOpen(true)}
         onExportProjectJson={() => void handleExportProjectJson()}
+        onImportProjectJson={(raw) => void handleImportProjectJson(raw)}
       />
 
       {/* Toast Notification (Bottom-right margin — never occludes TopBar, Search, or centered Composer) */}
@@ -799,6 +801,7 @@ export default function App() {
 
       <ScriptImportModal
         open={scriptOpen}
+        bibleEntries={bible}
         onClose={() => setScriptOpen(false)}
         onImportShots={(items) => void handleBulkScriptImport(items)}
       />
@@ -842,6 +845,9 @@ export default function App() {
           setEndFrameDataUrl(dataUrl);
           setMode('i2v');
           showToast(`Locked ${sourceLabel} → End Frame interpolation ready!`);
+        }}
+        onUpdateSubtitle={(shot, subtitle) => {
+          void updateShotState({ ...shot, subtitle });
         }}
         onDownload={(shot) => void handleDownloadShot(shot)}
       />

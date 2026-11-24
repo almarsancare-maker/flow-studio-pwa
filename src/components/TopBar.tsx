@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   BookOpen,
   Cpu,
@@ -9,6 +9,7 @@ import {
   HardDrive,
   Smartphone,
   Sparkles,
+  Upload,
   Zap,
 } from 'lucide-react';
 import type { EngineSettings, Project } from '../types/studio';
@@ -30,6 +31,7 @@ interface TopBarProps {
   onOpenScriptImport: () => void;
   onOpenEngine: () => void;
   onExportProjectJson: () => void;
+  onImportProjectJson: (rawJson: string) => void;
 }
 
 export function TopBar({
@@ -48,9 +50,11 @@ export function TopBar({
   onOpenScriptImport,
   onOpenEngine,
   onExportProjectJson,
+  onImportProjectJson,
 }: TopBarProps) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const importFileRef = useRef<HTMLInputElement | null>(null);
 
   const handleCreate = () => {
     const trimmed = newName.trim();
@@ -211,17 +215,39 @@ export function TopBar({
             </span>
           </button>
 
-          {/* Fix #5: Local Vault Usage + Portable Export */}
-          <button
-            type="button"
-            onClick={onExportProjectJson}
-            title={`Local IndexedDB Vault (${vaultMB} MB used) — Click to export portable Project JSON`}
-            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 bg-zinc-900/70 border border-zinc-800/80 hover:text-zinc-200 hover:border-zinc-700 transition whitespace-nowrap shrink-0"
-          >
-            <HardDrive className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-            <span>{vaultMB} MB</span>
-            <Download className="w-3 h-3 ml-0.5 text-zinc-500 shrink-0" />
-          </button>
+          {/* Fix #5: Local Vault Usage + Portable Export / Import */}
+          <div className="hidden xl:flex items-center gap-1 shrink-0">
+            <input
+              ref={importFileRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                void file.text().then((txt) => onImportProjectJson(txt));
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={onExportProjectJson}
+              title={`Local IndexedDB Vault (${vaultMB} MB used) — Export portable Project JSON`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 bg-zinc-900/70 border border-zinc-800/80 hover:text-zinc-200 hover:border-zinc-700 transition whitespace-nowrap"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <span>{vaultMB} MB</span>
+              <Download className="w-3 h-3 text-zinc-500 shrink-0" />
+            </button>
+            <button
+              type="button"
+              onClick={() => importFileRef.current?.click()}
+              title="Import Project Backup JSON"
+              className="p-1.5 rounded-lg text-zinc-400 bg-zinc-900/70 border border-zinc-800/80 hover:text-zinc-200 hover:border-zinc-700 transition"
+            >
+              <Upload className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           {canInstallPwa && (
             <button

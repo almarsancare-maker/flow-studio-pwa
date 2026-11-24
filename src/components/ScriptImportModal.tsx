@@ -1,21 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, ListVideo, Sparkles, X } from 'lucide-react';
-import type { GenerationMode, ParsedScriptShot } from '../types/studio';
+import { FileText, ListVideo, Loader2, Sparkles, Wand2, X } from 'lucide-react';
+import type { BibleEntry, GenerationMode, ParsedScriptShot } from '../types/studio';
 import { parseScriptShotList } from '../utils/promptCompiler';
+import { generateScriptWithDirector } from '../services/director';
 
 interface ScriptImportModalProps {
   open: boolean;
+  bibleEntries: BibleEntry[];
   onClose: () => void;
   onImportShots: (shots: ParsedScriptShot[]) => void;
 }
 
-const EXAMPLE_SCRIPT = `S1: [16:9] [image] Wide establishing shot of @LOC-D at midnight, tropical rain hitting glass, warm desk lamp glow
-S2: [16:9] [image] Medium close-up of @MIRA sketching quietly inside @LOC-D, shallow depth of field, 35mm cinema still
-S3: [16:9] [4s] [t2v] Slow push-in on @MIRA looking up from her notebook inside @LOC-D as thunder lights the window`;
+const EXAMPLE_SCRIPT = `S1: [16:9] [image] Wide establishing shot of @LOC-D at midnight, tropical rain hitting glass, warm desk lamp glow [sub: "Midnight in Manila — the rain never stops."]
+S2: [16:9] [image] Medium close-up of @MIRA sketching quietly inside @LOC-D, shallow depth of field, 35mm cinema still [sub: "One sketch left before sunrise."]
+S3: [16:9] [4s] [t2v] Slow push-in on @MIRA looking up from her notebook inside @LOC-D as thunder lights the window [sub: "Then the lights flickered."]`;
 
-export function ScriptImportModal({ open, onClose, onImportShots }: ScriptImportModalProps) {
+export function ScriptImportModal({
+  open,
+  bibleEntries,
+  onClose,
+  onImportShots,
+}: ScriptImportModalProps) {
   const [rawText, setRawText] = useState('');
+  const [premise, setPremise] = useState('');
+  const [writing, setWriting] = useState(false);
   const [defaultMode, setDefaultMode] = useState<GenerationMode>('t2i');
+
+  const handleAutoWrite = async () => {
+    if (!premise.trim() || writing) return;
+    setWriting(true);
+    try {
+      const tags = bibleEntries.map((b) => b.tag);
+      const res = await generateScriptWithDirector(premise.trim(), tags, 4);
+      setRawText(res.script);
+    } finally {
+      setWriting(false);
+    }
+  };
 
   const parsed = useMemo(
     () => parseScriptShotList(rawText, defaultMode),
@@ -65,6 +86,37 @@ export function ScriptImportModal({ open, onClose, onImportShots }: ScriptImport
         </div>
 
         <div className="p-5 flex-1 overflow-y-auto space-y-4">
+          {/* Free ($0) AI Storyboard Script Director */}
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-3 space-y-2">
+            <div className="text-xs font-semibold text-amber-200 flex items-center gap-1.5">
+              <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+              AI Film Script Director ($0 — Turn 1 Story Idea Into a Full Multi-Shot Script)
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                data-testid="script-premise-input"
+                value={premise}
+                onChange={(e) => setPremise(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleAutoWrite();
+                }}
+                placeholder="e.g. A young artist discovers a mysterious glowing letter in a rainy Manila dorm..."
+                className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500/50 outline-none"
+              />
+              <button
+                type="button"
+                data-testid="auto-write-script-btn"
+                disabled={!premise.trim() || writing}
+                onClick={() => void handleAutoWrite()}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-zinc-950 hover:bg-amber-300 disabled:opacity-40 shrink-0"
+              >
+                {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                Auto-Write Script
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs">
               <span className="text-zinc-400">Default Mode:</span>

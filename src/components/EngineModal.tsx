@@ -171,7 +171,7 @@ export function EngineModal({
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
-                HF FLUX.1-schnell + Pollinations keyframes, plus HF LTX-Video ZeroGPU / local motion.
+                FLUX.1-schnell stills + Multi-Space Wan 2.2 14B (First→Last Frame &amp; FP8) + LTX-Video cascade.
               </p>
             </button>
 
@@ -424,7 +424,9 @@ export function EngineModal({
                   }
                   className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 outline-none"
                 >
-                  <option value="hf-ltx-space">HF LTX-Video ZeroGPU → Fallback Motion</option>
+                  <option value="hf-ltx-space">
+                    Multi-Space Wan 2.2 14B + LTX-Video ($0 Cascade) → Director Motion
+                  </option>
                   <option value="ken-burns-local">Instant 2-Stage Keyframe + Cinema Motion</option>
                 </select>
               </div>
