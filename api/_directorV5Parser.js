@@ -486,12 +486,24 @@ export function extractLedgerUpdates(text, promptBlocks = []) {
 
   // 1) Explicit ledger lines: `<filename> ↔ <@token> ↔ <role>` or status mentions
   for (const line of raw.split('\n')) {
+    // Skip Dispense Ledger header/summary lines that mention all status labels simultaneously
+    if (
+      /^\s*(?:A\s*\(Asset Cards\)|B\+F\s*\(|ASSET GATE:|DISPENSE LEDGER|KIT FULLY SERVED)/i.test(line) ||
+      /REF BOUND\/APPROVED/i.test(line) ||
+      /^\s*\d+[.)]\s+/.test(line)
+    ) {
+      continue;
+    }
     const files = [...line.matchAll(FILENAME_RE)].map((m) => normalizeFilename(m[1]));
     if (files.length === 0) continue;
 
     let status = null;
     if (/REF BOUND/i.test(line)) status = 'REF BOUND';
-    else if (/APPROVED(?:\s+IN\s+O-6|\s*\(verified_on_disk\))?/i.test(line) && !/never\s+APPROVED/i.test(line)) {
+    else if (
+      /APPROVED(?:\s+IN\s+O-6|\s*\(verified_on_disk\))?/i.test(line) &&
+      !/never\s+APPROVED/i.test(line) &&
+      !/Confirm\s+/i.test(line)
+    ) {
       status = 'APPROVED';
     } else if (/QUEUE A REQUIRED|PENDING|card required/i.test(line)) {
       status = 'PENDING';

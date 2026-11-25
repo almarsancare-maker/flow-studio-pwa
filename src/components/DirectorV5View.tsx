@@ -1017,7 +1017,7 @@ export function DirectorV5View({
           )}
 
           {/* Conversation Stream */}
-          <div className="flex-1 space-y-4 pb-2" data-testid="director-message-feed">
+          <div className="flex-1 space-y-4 pb-8" data-testid="director-message-feed">
             {initializing && !activeSession ? (
               <div className="flow-card p-8 flex flex-col items-center justify-center gap-2 text-white/70">
                 <Loader2 className="w-5 h-5 animate-spin" />

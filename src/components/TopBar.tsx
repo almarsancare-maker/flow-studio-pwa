@@ -132,7 +132,7 @@ export function TopBar({
   return (
     <header
       data-testid="flow-top-bar"
-      className="flow-header sticky top-0 w-full shrink-0 !h-auto md:!h-[80px]"
+      className="flow-header sticky top-0 w-full shrink-0 !h-auto md:!h-[80px] bg-black/75 backdrop-blur-xl border-b border-white/[0.08]"
     >
       <nav
         data-testid="flow-main-nav"

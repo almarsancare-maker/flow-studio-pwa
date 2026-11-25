@@ -535,19 +535,20 @@ async function generateFreeImageCascade(
     }
   }
 
-  // Fast direct $0 still path (skips paywalled Pollinations flux 402 & blocked anonymous ZeroGPU)
+  // Primary $0 still path via same-origin Vercel /api/image (server-side Pollinations -> HF FLUX cascade, zero browser 402 console noise)
   try {
-    onProgress(35, 'Rendering keyframe via Pollinations Turbo ($0)...');
-    return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
-  } catch (e) {
-    errors.push(e instanceof Error ? e.message : 'Pollinations turbo failed');
-  }
-
-  try {
-    onProgress(75, 'Trying Vercel /api/image relay...');
+    onProgress(40, 'Rendering HD keyframe via $0 Cloud Image Relay...');
     return await generateImageViaServerApi(prompt, width, height, seed, 'turbo');
   } catch (e) {
     errors.push(e instanceof Error ? e.message : 'Server API failed');
+  }
+
+  // Browser-direct fallback if same-origin relay is temporarily busy
+  try {
+    onProgress(75, 'Trying direct Pollinations Turbo fallback ($0)...');
+    return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : 'Pollinations turbo failed');
   }
 
   throw new Error(`All $0 image providers failed (${errors.join(' | ')})`);

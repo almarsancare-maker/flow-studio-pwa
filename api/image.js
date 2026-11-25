@@ -9,39 +9,53 @@ function clampDim(val, fallback) {
 
 async function generateViaPollinations({ prompt, width, height, seed, model }) {
   const safeModel = model === 'turbo' ? 'turbo' : 'flux';
+  // Keep GET URL well within CDN/proxy limits while preserving core visual subject & specs
+  const urlPrompt = prompt.length > 900 ? prompt.slice(0, 900).trim() : prompt;
   const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(urlPrompt)}` +
     `?width=${width}&height=${height}&seed=${seed}&model=${safeModel}&nologo=true&enhance=false`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
-  try {
-    const resp = await fetch(url, {
-      headers: {
-        'User-Agent': 'FlowStudioPWA/1.0',
-        Accept: 'image/*',
-      },
-      signal: controller.signal,
-    });
-    if (!resp.ok) {
-      throw new Error(`Pollinations returned HTTP ${resp.status}`);
+  let lastErr = 'Pollinations failed';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 14_000);
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'User-Agent': 'FlowStudioPWA/1.0',
+          Accept: 'image/*',
+        },
+        signal: controller.signal,
+      });
+      if ((resp.status === 402 || resp.status === 429) && attempt === 0) {
+        lastErr = `Pollinations returned HTTP ${resp.status}`;
+        await new Promise((r) => setTimeout(r, 3200));
+        continue;
+      }
+      if (!resp.ok) {
+        throw new Error(`Pollinations returned HTTP ${resp.status}`);
+      }
+      const contentType = resp.headers.get('content-type') || 'image/jpeg';
+      if (!contentType.startsWith('image/')) {
+        throw new Error(`Pollinations returned unexpected content-type: ${contentType}`);
+      }
+      const buf = Buffer.from(await resp.arrayBuffer());
+      if (buf.length < 1024) {
+        throw new Error('Pollinations returned an empty image payload');
+      }
+      return {
+        provider: `Pollinations ${safeModel.toUpperCase()}`,
+        mimeType: contentType.split(';')[0],
+        dataUrl: `data:${contentType.split(';')[0]};base64,${buf.toString('base64')}`,
+      };
+    } catch (e) {
+      lastErr = e?.message || 'Pollinations error';
+      if (attempt === 1) throw new Error(lastErr);
+    } finally {
+      clearTimeout(timer);
     }
-    const contentType = resp.headers.get('content-type') || 'image/jpeg';
-    if (!contentType.startsWith('image/')) {
-      throw new Error(`Pollinations returned unexpected content-type: ${contentType}`);
-    }
-    const buf = Buffer.from(await resp.arrayBuffer());
-    if (buf.length < 1024) {
-      throw new Error('Pollinations returned an empty image payload');
-    }
-    return {
-      provider: `Pollinations ${safeModel.toUpperCase()}`,
-      mimeType: contentType.split(';')[0],
-      dataUrl: `data:${contentType.split(';')[0]};base64,${buf.toString('base64')}`,
-    };
-  } finally {
-    clearTimeout(timer);
   }
+  throw new Error(lastErr);
 }
 
 async function generateViaHfFluxSchnell({ prompt, width, height, seed }) {
