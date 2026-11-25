@@ -343,7 +343,8 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
     { tag: '@LOC-D', category: 'location', title: 'Manila Rain Dormitory', descriptor: 'dorm room' },
   ];
 
-  // Step 0 -> paste custom script -> must route to O-1a with CARLO, ELENA, CEBU BAKERY (zero @MIRA!)
+  // Step 0 -> paste custom script (default zero-key browser request, NO skipPollinations flag!)
+  // -> must route cleanly to O-1a with CARLO, ELENA, CEBU BAKERY (zero @MIRA, zero 20B garbled menu!)
   const rScript = createMockRes();
   await directorV5Handler(
     {
@@ -354,13 +355,13 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
         userInput: customScript,
         bible: starterBible,
         sessionState: { stage: 'step0' },
-        skipPollinations: true,
       },
     },
     rScript
   );
   assert.equal(rScript.result.statusCode, 200);
   assert.notEqual(rScript.result.body.stage, 'step0', 'Custom script must NEVER bounce back to STEP 0');
+  assert.ok(rScript.result.body.text.includes('O-1a GENRE CONFIRM GATE'), 'Must emit canonical O-1a GENRE CONFIRM GATE');
   assert.ok(rScript.result.body.text.includes('@CARLO'), 'Missing @CARLO in O-0 pre-analysis');
   assert.ok(rScript.result.body.text.includes('@ELENA'), 'Missing @ELENA in O-0 pre-analysis');
   assert.ok(/Cebu Bakery/i.test(rScript.result.body.text), 'Missing Cebu Bakery location');

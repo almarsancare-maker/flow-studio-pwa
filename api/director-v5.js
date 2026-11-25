@@ -335,10 +335,43 @@ export default async function handler(req, res) {
       sessionState,
     });
 
-    // Pure instant canonical gates (STEP 0 reset / Video Gate / Asset Sweep) never need to waste quota
+    // Canonical MASTER PROMPT v5.0.3 pipeline gates are strictly structured (verbatim menus,
+    // exact screenplay extraction, ATTACH: lines, §6.1 math, 12-cell Acceptance Cards, 78/78 checks).
+    // Anonymous 20B Pollinations models routinely hallucinate broken menus ("★ Recommended and final option Custom")
+    // and enforce a 45s per-IP 402 cooldown. Therefore:
+    //   - When GEMINI_API_KEY is configured (server env or user's free AI Studio key), Gemini 2.5 Flash
+    //     runs the full verbatim 129,990-byte MASTER_PROMPT_V503 natively.
+    //   - In $0 zero-key mode, structured v5.0.3 pipeline gates execute instantaneously via our real
+    //     Script-Intelligent v5.0.3 Compiler (0ms, 0 hallucinations, 0 cooldowns). Pollinations is only
+    //     consulted if explicitly requested (`usePollinations: true`) and passes strict v5.0.3 validation.
+    const STRUCTURED_V5_STAGES = new Set([
+      'step0',
+      'o1a_genre',
+      'o1b_mode',
+      'o2_envelope',
+      'o13_platform',
+      'await_express_source',
+      'await_idea',
+      'await_paste',
+      'await_preset',
+      'auto_a1a',
+      'auto_a2',
+      'auto_a3',
+      'auto_a4',
+      'auto_a5',
+      'auto_a6',
+      'auto_a7',
+      'video_gate',
+      'sweep',
+      'build_gate',
+      'queue_a',
+      'shots',
+      'assembly',
+    ]);
     const isInstantCanonicalGate =
       !apiKey &&
-      (sessionState.stage === 'step0' && ['1', '2', '3', '4', '5', '6', '7', '8'].includes(userInput) ||
+      !body.usePollinations &&
+      (STRUCTURED_V5_STAGES.has(det.nextState.stage) ||
         /\b(ASSETS READY|I HAVE THE ASSETS)\b/i.test(userInput));
 
     if (!forceDeterministic && apiKey) {
@@ -388,10 +421,15 @@ export default async function handler(req, res) {
           expectedStage: det.nextState.stage,
         });
         const parsed = parseDirectorV5Output(poll.text);
-        // Enforce v5.0.3 Structural Quality Guard on 20B zero-key fallback outputs:
+        // Enforce strict v5.0.3 Structural Quality Guard on 20B fallback outputs:
         // 1) Never bounce back to STEP 0 when operator submitted real material or progressed past STEP 0
-        // 2) Carry clickable menu + required artifacts for Express/BUILD/Shot turns
+        // 2) Reject hallucinated menus (e.g. "★ Recommended and final option Custom") or premature CHECKS stamp
+        // 3) Require canonical artifacts for Express/BUILD/Shot turns
         const bouncedToStep0 = det.nextState.stage !== 'step0' && parsed.stage === 'step0';
+        const hasGarbledMenu = parsed.options.some((o) => /★.*\bCustom\b/i.test(o.label));
+        const prematureChecks =
+          Boolean(parsed.checksStamp) &&
+          !['build_gate', 'queue_a', 'shots', 'assembly'].includes(det.nextState.stage);
         const expectsBuildKit =
           sessionState.stage === 'build_gate' && (userInput === '1' || /\b(BUILD|YES|GO)\b/i.test(userInput));
         const expectsExpressGate = sessionState.stage === 'await_express_source';
@@ -399,6 +437,8 @@ export default async function handler(req, res) {
 
         const passesGuard =
           !bouncedToStep0 &&
+          !hasGarbledMenu &&
+          !prematureChecks &&
           parsed.options.length >= 2 &&
           (!expectsExpressGate || parsed.stage === 'build_gate') &&
           (!expectsBuildKit ||
@@ -434,7 +474,7 @@ export default async function handler(req, res) {
       ok: true,
       version: MASTER_PROMPT_V503_VERSION,
       provider: isInstantCanonicalGate
-        ? 'Director v5.0.3 Instant Gate ($0)'
+        ? 'Director v5.0.3 Compiler ($0 Instant)'
         : 'Director v5.0.3 Compiler ($0 Zero-Key)',
       providerTier: 'deterministic',
       usingServerKey: false,
