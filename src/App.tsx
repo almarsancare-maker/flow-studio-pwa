@@ -180,15 +180,40 @@ export default function App() {
       async ([{ projects: loadedProjects, settings: loadedSettings }, caps]) => {
         if (!active) return;
         setServerKeys(caps);
-        // Always default to 100% Free 24/7 Cloud ($0 Wan 2.2 14B + FLUX Cascade) unless user explicitly picks another engine
-        setEngineSettings(loadedSettings);
+        let effectiveSettings = loadedSettings;
+
+        // 1-Click Auto-Connect from Google Colab notebook (?colab=https://*.trycloudflare.com)
+        const urlParams = new URLSearchParams(window.location.search);
+        const colabParam = (urlParams.get('colab') || '').trim().replace(/\/+$/, '');
+        if (/^https:\/\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.trycloudflare\.com$/i.test(colabParam)) {
+          effectiveSettings = {
+            ...loadedSettings,
+            activeEngine: 'colab-t4',
+            colabUrl: colabParam,
+          };
+          await saveEngineSettings(effectiveSettings);
+          urlParams.delete('colab');
+          const cleanUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams}` : ''}${window.location.hash}`;
+          window.history.replaceState({}, '', cleanUrl);
+          showToast('Connecting to your Free Google Colab T4 GPU...');
+        }
+
+        setEngineSettings(effectiveSettings);
         setProjects(loadedProjects);
         const savedId = window.localStorage.getItem('flowstudio_active_project');
         const matched = loadedProjects.find((p) => p.id === savedId);
         setActiveProjectId(matched ? matched.id : loadedProjects[0].id);
-        if (loadedSettings.activeEngine === 'colab-t4' && loadedSettings.colabUrl.trim()) {
-          void pingColabBackend(loadedSettings.colabUrl).then((health) => {
-            if (active) setColabHealth(health);
+        if (effectiveSettings.activeEngine === 'colab-t4' && effectiveSettings.colabUrl.trim()) {
+          void pingColabBackend(effectiveSettings.colabUrl).then((health) => {
+            if (!active) return;
+            setColabHealth(health);
+            if (colabParam) {
+              showToast(
+                health.online
+                  ? `Connected to Colab ${health.gpuName || 'T4'} GPU — Ready for Video!`
+                  : `Colab link saved, but tunnel check failed: ${health.error || 'offline'}`
+              );
+            }
           });
         }
         await refreshVaultUsage();
