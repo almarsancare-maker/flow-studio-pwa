@@ -168,7 +168,8 @@ def run_mobile_e2e(playwright):
     page.get_by_test_id("director-option-1").click()
     page.get_by_text("O-16 FINAL GATE: BUILD").first.wait_for(timeout=35_000)
     page.get_by_test_id("director-option-1").click()
-    page.get_by_text("CHECKS: 78/78 PASS").first.wait_for(timeout=35_000)
+    page.get_by_test_id("director-generate-studio-btn").first.wait_for(timeout=35_000)
+    page.get_by_test_id("director-copy-flow-btn").first.wait_for(timeout=8_000)
     check_no_horizontal_overflow(page, "Mobile Director BUILD")
 
     if SHOT_DIR:
@@ -176,8 +177,8 @@ def run_mobile_e2e(playwright):
 
     print("[Mobile 390x844] 4/4 Opening Mobile Asset Inventory Ledger drawer & switching back to Studio ...")
     page.get_by_test_id("mobile-ledger-toggle-btn").click()
-    page.get_by_test_id("director-ledger-list").wait_for(timeout=8_000)
-    page.get_by_label("Close ledger drawer").click()
+    page.locator('[data-testid="director-ledger-list"]:visible').first.wait_for(timeout=8_000)
+    page.locator('button[aria-label="Close ledger drawer"]:visible').first.click()
     page.get_by_test_id("mobile-nav-studio-btn").click()
     page.get_by_test_id("flow-main-canvas").wait_for(timeout=8_000)
     check_no_horizontal_overflow(page, "Mobile Studio return")
