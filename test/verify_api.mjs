@@ -304,9 +304,9 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   // Verify Never-Regenerate Law: if all Queue A cards are REF BOUND, BUILD skips directly to Shot S1
   const preBoundLedger = [
     { filename: 'mira_w1_sheet.jpg', token: '@MIRA_W1', role: 'face lock', status: 'REF BOUND' },
-    { filename: 'set_rain_dorm_sheet.jpg', token: '@SET-RAINDORM', role: 'spatial lock', status: 'REF BOUND' },
-    { filename: 'set_rain_dorm_angles.jpg', token: '@SET-RAINDORM', role: 'spatial angles', status: 'REF BOUND' },
-    { filename: 'blueprint_rain_dorm.jpg', token: '@SET-RAINDORM', role: 'blueprint', status: 'REF BOUND' },
+    { filename: 'set_manila_rain_dormitory_sheet.jpg', token: '@SET-MANILA_RAIN_DORMITORY', role: 'spatial lock', status: 'REF BOUND' },
+    { filename: 'set_manila_rain_dormitory_angles.jpg', token: '@SET-MANILA_RAIN_DORMITORY', role: 'spatial angles', status: 'REF BOUND' },
+    { filename: 'blueprint_manila_rain_dormitory.jpg', token: '@SET-MANILA_RAIN_DORMITORY', role: 'blueprint', status: 'REF BOUND' },
     { filename: 'prop_sketchbook_sheet.jpg', token: '@PROP-SKETCHBOOK', role: 'prop lock', status: 'REF BOUND' },
   ];
   const resBoundBuild = createMockRes();
@@ -327,6 +327,87 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   assert.equal(resBoundBuild.result.statusCode, 200);
   assert.equal(resBoundBuild.result.body.sessionState.stage, 'shots', 'Should skip Queue A when all assets REF BOUND');
   console.log('[PASS] Test 8: /api/director-v5 STEP 0 -> Express Walk -> BUILD -> Queue A -> Shot S1 + REF BOUND skip verified');
+}
+
+// Test 9: Real custom screenplay parsing (CARLO & ELENA in INT. CEBU BAKERY - DAWN) with zero @MIRA leakage
+{
+  const customScript = [
+    'INT. CEBU BAKERY - DAWN',
+    'CARLO (35, tired baker in flour-dusted maroon apron) slams a metal tray of hot pandesal onto the stainless counter.',
+    'ELENA (32, sharp-eyed sister in yellow blouse) holds an eviction notice.',
+    'ELENA: "Three days, Carlo. That is all the landlord gave us."',
+    'CARLO: "Then we bake double tonight."',
+  ].join('\n');
+  const starterBible = [
+    { tag: '@MIRA', category: 'character', title: 'Mira', descriptor: '21yo Filipina woman' },
+    { tag: '@LOC-D', category: 'location', title: 'Manila Rain Dormitory', descriptor: 'dorm room' },
+  ];
+
+  // Step 0 -> paste custom script -> must route to O-1a with CARLO, ELENA, CEBU BAKERY (zero @MIRA!)
+  const rScript = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: customScript,
+        bible: starterBible,
+        sessionState: { stage: 'step0' },
+        skipPollinations: true,
+      },
+    },
+    rScript
+  );
+  assert.equal(rScript.result.statusCode, 200);
+  assert.notEqual(rScript.result.body.stage, 'step0', 'Custom script must NEVER bounce back to STEP 0');
+  assert.ok(rScript.result.body.text.includes('@CARLO'), 'Missing @CARLO in O-0 pre-analysis');
+  assert.ok(rScript.result.body.text.includes('@ELENA'), 'Missing @ELENA in O-0 pre-analysis');
+  assert.ok(/Cebu Bakery/i.test(rScript.result.body.text), 'Missing Cebu Bakery location');
+  assert.ok(!/MIRA/i.test(rScript.result.body.text), 'Starter @MIRA leaked into custom script!');
+
+  // Option 2 -> EXPRESS: FAST-TRACK ALL -> stops at O-16 BUILD Gate
+  const rFast = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '2',
+        bible: starterBible,
+        sessionState: rScript.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    rFast
+  );
+  assert.equal(rFast.result.body.stage, 'build_gate');
+  assert.ok(rFast.result.body.text.includes('carlo_w1_sheet.jpg'), 'Missing carlo_w1_sheet.jpg');
+  assert.ok(rFast.result.body.text.includes('elena_w1_sheet.jpg'), 'Missing elena_w1_sheet.jpg');
+
+  // Option 1 -> BUILD -> verifies verbatim dialogue + multi-character Queue A + zero @MIRA leak
+  const rBuild = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '1',
+        bible: starterBible,
+        sessionState: rFast.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    rBuild
+  );
+  assert.equal(rBuild.result.body.checksStamp, '78/78 PASS');
+  assert.ok(rBuild.result.body.text.includes('Three days, Carlo. That is all the landlord gave us.'), 'Verbatim ELENA dialogue lost!');
+  assert.ok(rBuild.result.body.text.includes('Then we bake double tonight.'), 'Verbatim CARLO dialogue lost!');
+  assert.ok(rBuild.result.body.promptBlocks[0].assetFilename === 'carlo_w1_sheet.jpg', 'Expected Queue A Card 1 = carlo_w1_sheet.jpg');
+  assert.ok(!/MIRA/i.test(rBuild.result.body.text), 'Starter @MIRA leaked into BUILD kit!');
+  console.log('[PASS] Test 9: Real custom screenplay (CARLO & ELENA @ CEBU BAKERY) parsed verbatim with 0 starter leakage');
 }
 
 console.log('ALL_PHASE2_API_TESTS_PASSED');

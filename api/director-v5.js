@@ -170,7 +170,7 @@ async function callGeminiV5({ apiKey, history, userInput, runtimeContext }) {
   throw new Error(lastErr);
 }
 
-async function callPollinationsV5({ history, userInput, runtimeContext }) {
+async function callPollinationsV5({ history, userInput, runtimeContext, expectedStage }) {
   const now = Date.now();
   if (now < pollinationsCooldownUntil) {
     const waitSec = Math.ceil((pollinationsCooldownUntil - now) / 1000);
@@ -179,8 +179,16 @@ async function callPollinationsV5({ history, userInput, runtimeContext }) {
     throw err;
   }
 
+  // Strip the raw STEP 0 menu text from Pollinations' compact prompt on non-STEP-0 turns so 20B models
+  // NEVER echo STEP 0 back when the operator has already pasted a real script or chosen an option.
+  const compactWithoutStep0 = MASTER_PROMPT_V503_COMPACT.split('CANONICAL STEP 0 MENU:')[0].trim();
+  const stageHint =
+    expectedStage && expectedStage !== 'step0'
+      ? `\nACTIVE STAGE DIRECTIVE: The operator has ALREADY progressed past STEP 0 (next expected stage: ${expectedStage}). NEVER reprint [STEP 0 — ENTRY QUESTION]. Honor the operator's exact pasted characters, locations, and verbatim dialogue.`
+      : '';
+
   const messages = [
-    { role: 'system', content: `${MASTER_PROMPT_V503_COMPACT}${runtimeContext}` },
+    { role: 'system', content: `${compactWithoutStep0}${stageHint}${runtimeContext}` },
     ...history.slice(-8).map((m) => ({
       role: m.role,
       content: m.content.slice(0, 4000),
@@ -377,15 +385,20 @@ export default async function handler(req, res) {
           history,
           userInput,
           runtimeContext,
+          expectedStage: det.nextState.stage,
         });
         const parsed = parseDirectorV5Output(poll.text);
         // Enforce v5.0.3 Structural Quality Guard on 20B zero-key fallback outputs:
-        // must carry a valid clickable menu AND required artifacts for Express/BUILD/Shot turns
-        const expectsBuildKit = sessionState.stage === 'build_gate' && (userInput === '1' || /\b(BUILD|YES|GO)\b/i.test(userInput));
+        // 1) Never bounce back to STEP 0 when operator submitted real material or progressed past STEP 0
+        // 2) Carry clickable menu + required artifacts for Express/BUILD/Shot turns
+        const bouncedToStep0 = det.nextState.stage !== 'step0' && parsed.stage === 'step0';
+        const expectsBuildKit =
+          sessionState.stage === 'build_gate' && (userInput === '1' || /\b(BUILD|YES|GO)\b/i.test(userInput));
         const expectsExpressGate = sessionState.stage === 'await_express_source';
         const expectsShotCard = det.nextState.stage === 'shots';
 
         const passesGuard =
+          !bouncedToStep0 &&
           parsed.options.length >= 2 &&
           (!expectsExpressGate || parsed.stage === 'build_gate') &&
           (!expectsBuildKit ||
@@ -406,7 +419,9 @@ export default async function handler(req, res) {
             ...parsed,
           });
         }
-        pollWarning = 'Pollinations 20B output missed v5.0.3 structural lock — served Ironclad v5.0.3 compiler';
+        pollWarning = bouncedToStep0
+          ? 'Pollinations echoed STEP 0 — served v5.0.3 script compiler'
+          : 'Pollinations 20B output missed v5.0.3 structural lock — served Ironclad v5.0.3 compiler';
       } catch (pollErr) {
         cooldownSec = pollErr?.cooldownSec ?? null;
         pollWarning = pollErr?.message || 'Pollinations unavailable';

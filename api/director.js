@@ -21,14 +21,15 @@ function localEnhancePrompt(prompt, mode) {
 }
 
 function localGenerateScript(premise, tags) {
-  const lead = tags[0] || '@MIRA';
-  const loc = tags[1] || '@LOC-D';
   const p = premise.trim();
+  const useTags = tags.filter((t) => p.toUpperCase().includes(t.toUpperCase()));
+  const lead = useTags[0] || 'the protagonist';
+  const loc = useTags[1] || 'the main location';
   return [
-    `S1: [16:9] [image] Wide establishing shot of ${loc} setting the mood for: ${p}, atmospheric volumetric light, 35mm cinema still [sub: "It started on a night nobody would forget."]`,
-    `S2: [16:9] [5s] [t2v] Slow dolly-in on ${lead} inside ${loc}, subtle emotional expression reacting to ${p}, shallow depth of field [sub: "Every detail was right in front of me."]`,
-    `S3: [16:9] [5s] [t2v] Close-up handheld camera tracking ${lead}'s hands and eyes in dramatic key light, cinematic tension [sub: "There was no turning back now."]`,
-    `S4: [16:9] [5s] [t2v] Sweeping crane shot rising above ${lead} inside ${loc}, rain reflections and warm amber rim light [sub: "And everything changed in an instant."]`,
+    `S1: [16:9] [image] Wide establishing 35mm cinema still setting the scene for ${p} inside ${loc}, atmospheric practical lighting, shallow depth of field [sub: "It began before sunrise."]`,
+    `S2: [16:9] [5s] [t2v] Slow dolly-in medium close-up on ${lead} reacting to ${p}, authentic pore-level detail, subtle handheld breath [sub: "Every second counts now."]`,
+    `S3: [16:9] [5s] [t2v] Tight over-the-shoulder close-up tracking hands and intense eye contact during ${p}, dramatic key-to-fill contrast [sub: "No turning back."]`,
+    `S4: [16:9] [5s] [t2v] Steady closing hold capturing the emotional aftermath of ${p}, warm rim light and natural film grain [sub: "Everything changed right here."]`,
   ].join('\n');
 }
 
