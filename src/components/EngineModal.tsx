@@ -41,21 +41,26 @@ interface EngineModalProps {
   onHealthUpdate: (status: ColabHealthStatus) => void;
 }
 
+type ModalTab = 'hf' | 'colab' | 'pro';
+
 const REPLICATE_MODELS = [
-  { id: 'bytedance/seedance-2.5', label: 'Seedance 2.5 (Latest Flagship + Native Audio)' },
-  { id: 'bytedance/seedance-2.0', label: 'Seedance 2.0 (Cinematic T2V / I2V + Audio)' },
-  { id: 'bytedance/seedance-1.5-pro', label: 'Seedance 1.5 Pro (Audio + Lip-Sync)' },
-  { id: 'bytedance/seedance-1-pro', label: 'Seedance 1.0 Pro (Fast / Lower Cost)' },
+  { id: 'bytedance/seedance-2.5', label: 'Seedance 2.5 (Latest + Audio)' },
+  { id: 'bytedance/seedance-2.0', label: 'Seedance 2.0 (Cinema + Audio)' },
+  { id: 'bytedance/seedance-1.5-pro', label: 'Seedance 1.5 Pro (Lip-Sync)' },
+  { id: 'bytedance/seedance-1-pro', label: 'Seedance 1.0 Pro (Fast)' },
 ];
 
 const FAL_MODELS = [
-  { id: 'bytedance/seedance-2.5/text-to-video', label: 'Seedance 2.5 (Latest — Auto T2V/I2V)' },
-  { id: 'bytedance/seedance-2.0/text-to-video', label: 'Seedance 2.0 (Auto T2V/I2V + Audio)' },
-  {
-    id: 'fal-ai/bytedance/seedance/v1/pro/text-to-video',
-    label: 'Seedance 1.0 Pro (Fast / Lower Cost)',
-  },
+  { id: 'bytedance/seedance-2.5/text-to-video', label: 'Seedance 2.5 (Auto T2V/I2V)' },
+  { id: 'bytedance/seedance-2.0/text-to-video', label: 'Seedance 2.0 (T2V/I2V + Audio)' },
+  { id: 'fal-ai/bytedance/seedance/v1/pro/text-to-video', label: 'Seedance 1.0 Pro (Fast)' },
 ];
+
+function tabForEngine(engine: EngineSettings['activeEngine']): ModalTab {
+  if (engine === 'colab-t4') return 'colab';
+  if (engine === 'gemini-omni' || engine === 'seedance-byok') return 'pro';
+  return 'hf';
+}
 
 export function EngineModal({
   open,
@@ -67,16 +72,20 @@ export function EngineModal({
   onHealthUpdate,
 }: EngineModalProps) {
   const [draft, setDraftState] = useState<EngineSettings>(settings);
+  const [tab, setTab] = useState<ModalTab>(() => tabForEngine(settings.activeEngine));
+  const [proChoice, setProChoice] = useState<'gemini-omni' | 'seedance-byok'>('gemini-omni');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const dirtyRef = useRef(false);
   const wasOpenRef = useRef(false);
-  const [testingColab, setTestingColab] = useState(false);
+
   const [testingHf, setTestingHf] = useState(false);
   const [hfStatus, setHfStatus] = useState<SeedanceKeyStatus | null>(null);
+  const [testingColab, setTestingColab] = useState(false);
   const [testingOmni, setTestingOmni] = useState(false);
   const [omniStatus, setOmniStatus] = useState<SeedanceKeyStatus | null>(null);
   const [testingSeedance, setTestingSeedance] = useState(false);
   const [seedanceStatus, setSeedanceStatus] = useState<SeedanceKeyStatus | null>(null);
-  const [showPaidApis, setShowPaidApis] = useState(false);
 
   const setDraft: typeof setDraftState = (next) => {
     dirtyRef.current = true;
@@ -87,11 +96,13 @@ export function EngineModal({
     if (open && !wasOpenRef.current) {
       dirtyRef.current = false;
       setDraftState(settings);
+      setTab(tabForEngine(settings.activeEngine));
+      if (settings.activeEngine === 'seedance-byok') setProChoice('seedance-byok');
+      else setProChoice('gemini-omni');
+      setShowAdvanced(false);
+      setHfStatus(null);
       setOmniStatus(null);
       setSeedanceStatus(null);
-      setShowPaidApis(
-        settings.activeEngine === 'gemini-omni' || settings.activeEngine === 'seedance-byok'
-      );
     } else if (open && !dirtyRef.current) {
       setDraftState(settings);
     }
@@ -109,13 +120,29 @@ export function EngineModal({
 
   if (!open) return null;
 
+  const handleSelectTab = (nextTab: ModalTab) => {
+    setTab(nextTab);
+    setShowAdvanced(false);
+    if (nextTab === 'hf') {
+      setDraft((prev) => ({ ...prev, activeEngine: 'free-24-7' }));
+    } else if (nextTab === 'colab') {
+      setDraft((prev) => ({ ...prev, activeEngine: 'colab-t4' }));
+    } else {
+      setDraft((prev) => ({ ...prev, activeEngine: proChoice }));
+    }
+  };
+
   const handleTestHf = async () => {
     setTestingHf(true);
     try {
       const result = await verifyHfToken(draft.hfToken);
       setHfStatus(result);
       if (result.valid) {
-        const next: EngineSettings = { ...draft, activeEngine: 'free-24-7', hfToken: draft.hfToken.trim() };
+        const next: EngineSettings = {
+          ...draft,
+          activeEngine: 'free-24-7',
+          hfToken: draft.hfToken.trim(),
+        };
         setDraftState(next);
         dirtyRef.current = false;
         await onSaveSettings(next);
@@ -131,7 +158,11 @@ export function EngineModal({
       const result = await pingColabBackend(draft.colabUrl);
       onHealthUpdate(result);
       if (result.online) {
-        const next: EngineSettings = { ...draft, activeEngine: 'colab-t4', colabUrl: draft.colabUrl.trim() };
+        const next: EngineSettings = {
+          ...draft,
+          activeEngine: 'colab-t4',
+          colabUrl: draft.colabUrl.trim(),
+        };
         setDraftState(next);
         dirtyRef.current = false;
         await onSaveSettings(next);
@@ -147,7 +178,11 @@ export function EngineModal({
       const result = await verifyGeminiOmniApiKey(draft.geminiApiKey);
       setOmniStatus(result);
       if (result.valid) {
-        const next: EngineSettings = { ...draft, activeEngine: 'gemini-omni', geminiApiKey: draft.geminiApiKey.trim() };
+        const next: EngineSettings = {
+          ...draft,
+          activeEngine: 'gemini-omni',
+          geminiApiKey: draft.geminiApiKey.trim(),
+        };
         setDraftState(next);
         dirtyRef.current = false;
         await onSaveSettings(next);
@@ -163,7 +198,11 @@ export function EngineModal({
       const result = await verifySeedanceApiKey(draft.seedanceProvider, draft.seedanceApiKey);
       setSeedanceStatus(result);
       if (result.valid) {
-        const next: EngineSettings = { ...draft, activeEngine: 'seedance-byok', seedanceApiKey: draft.seedanceApiKey.trim() };
+        const next: EngineSettings = {
+          ...draft,
+          activeEngine: 'seedance-byok',
+          seedanceApiKey: draft.seedanceApiKey.trim(),
+        };
         setDraftState(next);
         dirtyRef.current = false;
         await onSaveSettings(next);
@@ -174,19 +213,21 @@ export function EngineModal({
   };
 
   const handleProviderChange = (provider: SeedanceProvider) => {
-    const defaultModel =
-      provider === 'replicate' ? REPLICATE_MODELS[0].id : FAL_MODELS[0].id;
+    const defaultModel = provider === 'replicate' ? REPLICATE_MODELS[0].id : FAL_MODELS[0].id;
     setDraft((prev) => ({ ...prev, seedanceProvider: provider, seedanceModel: defaultModel }));
     setSeedanceStatus(null);
   };
 
-  const handleSave = async () => {
+  const handleSaveAndClose = async () => {
     await onSaveSettings(draft);
     onClose();
   };
 
+  const hfConnected = draft.hfToken.trim().length > 0 && (hfStatus === null || hfStatus.valid);
   const activeSeedanceModels =
     draft.seedanceProvider === 'replicate' ? REPLICATE_MODELS : FAL_MODELS;
+  const hasServerSeedance =
+    draft.seedanceProvider === 'replicate' ? serverKeys.replicate : serverKeys.fal;
 
   return (
     <div
@@ -195,18 +236,17 @@ export function EngineModal({
     >
       <div
         data-testid="flow-modal-surface"
-        className="flow-modal w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="flow-modal w-full max-w-[560px] max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-5 border-b border-white/15 flex items-start justify-between gap-3">
+        {/* Minimal Header */}
+        <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[16px] font-medium text-white flex items-center gap-2 tracking-[-0.01em]">
-              <Cpu className="w-4 h-4 stroke-[1.6] text-white" />
-              Cabardo Studio Compute — Video &amp; Image Backends
+            <h2 className="text-[17px] font-medium text-white tracking-[-0.02em]">
+              Connect Video GPU
             </h2>
-            <p className="text-[13px] text-white/55 mt-1 leading-[19px]">
-              Stills run instantly ($0). Real AI video requires one compute backend below: a free
-              Hugging Face Read token, Free Google Colab T4 GPU, or an optional paid cloud API key.
+            <p className="text-[12.5px] text-white/55 mt-0.5 leading-[18px]">
+              Pick one option below for real AI video. Stills work immediately without setup.
             </p>
           </div>
           <button
@@ -219,704 +259,695 @@ export function EngineModal({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-4">
-          {/* Primary Hero Cards: 2 Free-Tier Video Compute Options */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Clean 3-Tab Switcher (One Engine Visible at a Time) */}
+        <div className="px-6 pb-4">
+          <div className="flow-pill-group grid grid-cols-3 p-1 gap-1">
             <button
               type="button"
               data-testid="select-engine-free"
-              onClick={() => setDraft({ ...draft, activeEngine: 'free-24-7' })}
-              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${draft.activeEngine === 'free-24-7'
-                ? 'border-white bg-white/10'
-                : 'border-white/15 bg-white/5 hover:border-white/25'
-                }`}
+              onClick={() => handleSelectTab('hf')}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-[32px] text-[12.5px] font-medium transition cursor-pointer ${
+                tab === 'hf' ? 'bg-white text-[#121317]' : 'text-white/65 hover:text-white'
+              }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[14px] font-medium text-white flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 stroke-[1.6] shrink-0" />
-                  HF ZeroGPU Cloud
-                </span>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-[32px] bg-white/10 text-[#29c58f] border border-white/15 shrink-0">
-                  FREE HF TOKEN
-                </span>
-              </div>
-              <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
-                Runs flagship Lightricks LTX-2.5 22B (native video + speech + audio), LTX-2.3
-                First→Last &amp; Wan 2.2 14B using your free Hugging Face Read token.
-              </p>
+              <Sparkles className="w-3.5 h-3.5 stroke-[1.7] shrink-0" />
+              <span>Free HF Cloud</span>
             </button>
 
             <button
               type="button"
               data-testid="select-engine-colab"
-              onClick={() => setDraft({ ...draft, activeEngine: 'colab-t4' })}
-              className={`text-left p-4 rounded-[16px] border transition cursor-pointer ${draft.activeEngine === 'colab-t4'
-                ? 'border-white bg-white/10'
-                : 'border-white/15 bg-white/5 hover:border-white/25'
-                }`}
+              onClick={() => handleSelectTab('colab')}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-[32px] text-[12.5px] font-medium transition cursor-pointer ${
+                tab === 'colab' ? 'bg-white text-[#121317]' : 'text-white/65 hover:text-white'
+              }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[14px] font-medium text-white flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4 stroke-[1.6] shrink-0" />
-                  Free Google Colab T4
-                </span>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-[32px] bg-white/10 text-[#29c58f] border border-white/15 shrink-0">
-                  $0 · 16 GB GPU
-                </span>
-              </div>
-              <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
-                Dedicated free NVIDIA T4 16 GB GPU: 4-bit Wan 2.2 TI2V-5B (Apache 2.0), LTX-Video
-                0.9.7 &amp; AudioLDM2 with zero ZeroGPU quota blocks.
-              </p>
+              <Cpu className="w-3.5 h-3.5 stroke-[1.7] shrink-0" />
+              <span>Free Colab GPU</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="toggle-paid-apis-btn"
+              onClick={() => handleSelectTab('pro')}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-[32px] text-[12.5px] font-medium transition cursor-pointer ${
+                tab === 'pro' ? 'bg-white text-[#121317]' : 'text-white/65 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 stroke-[1.7] shrink-0" />
+              <span>Pro APIs</span>
             </button>
           </div>
+        </div>
 
-          {/* Engine 1 Config (HF ZeroGPU + Instant Stills) */}
-          <div className="rounded-[16px] border border-white/15 bg-white/[0.04] p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 stroke-[1.6] text-[#29c58f]" />
-                HF ZeroGPU Options (Free Account Required for Video)
+        {/* Focused Single-Engine Body */}
+        <div className="px-6 pb-5 overflow-y-auto space-y-4">
+          {/* ═══ TAB 1: FREE HUGGING FACE CLOUD (2 SIMPLE STEPS) ═══ */}
+          {tab === 'hf' && (
+            <div className="space-y-4">
+              {/* Live Status Pill */}
+              <div
+                className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-[14px] border text-[12px] ${
+                  hfStatus?.valid || hfConnected
+                    ? 'bg-[#29c58f]/10 border-[#29c58f]/35 text-white'
+                    : 'bg-white/[0.04] border-white/15 text-white/80'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      hfStatus?.valid || hfConnected ? 'bg-[#29c58f]' : 'bg-[#f59e0b]'
+                    }`}
+                  />
+                  <span className="truncate">
+                    {hfStatus?.valid ? (
+                      <>
+                        Connected as <strong>{hfStatus.account}</strong> — LTX-2.5 22B ready
+                      </>
+                    ) : hfConnected ? (
+                      <>
+                        HF Token saved — <strong>LTX-2.5 22B</strong> (Video + Speech + Audio)
+                      </>
+                    ) : (
+                      <>
+                        Runs <strong>LTX-2.5 22B</strong> (Video + Audio) · Free, 15s setup
+                      </>
+                    )}
+                  </span>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#29c58f] shrink-0">
+                  $0 · NO CARD
+                </span>
               </div>
-              <span className="text-[11px] text-white/50">No Credit Card</span>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[12px] text-white/60 mb-1.5">
-                  Keyframe Image Model
-                </label>
-                <select
-                  data-testid="free-image-model-select"
-                  value={draft.freeImageModel}
-                  onChange={(e) =>
-                    setDraft({ ...draft, freeImageModel: e.target.value as FreeImageModel })
-                  }
-                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
-                >
-                  <option value="flux" className="bg-[#131314]">FLUX.1-schnell (HF Token / Turbo fallback)</option>
-                  <option value="flux-dev" className="bg-[#131314]">FLUX.1-dev Pro (Requires HF Token)</option>
-                  <option value="sd35-turbo" className="bg-[#131314]">SD 3.5 Large Turbo (Requires HF Token)</option>
-                  <option value="turbo" className="bg-[#131314]">Pollinations Turbo (Instant, No Token)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] text-white/60 mb-1.5">
-                  Video Mode
-                </label>
-                <select
-                  value={draft.freeVideoFallback}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      freeVideoFallback: e.target.value as 'hf-ltx-space' | 'ken-burns-local',
-                    })
-                  }
-                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
-                >
-                  <option value="hf-ltx-space" className="bg-[#131314]">
-                    LTX-2.5 22B (Native Audio) + Wan 2.2 14B
-                  </option>
-                  <option value="ken-burns-local" className="bg-[#131314]">
-                    Still Pan/Zoom Only (No AI Video)
-                  </option>
-                </select>
-              </div>
-            </div>
 
-            {/* Free Hugging Face Token ($0 — unlocks 5x ZeroGPU quota so Wan 2.2 & LTX-Video actually run!) */}
-            <div className="rounded-[12px] border border-white/15 bg-black/40 p-3 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-[12px] font-medium text-white">
-                  Free Hugging Face Token ($0 — Required for Wan 2.2 &amp; LTX-Video ZeroGPU)
-                </label>
+              {/* Step 1 */}
+              <div className="rounded-[14px] border border-white/15 bg-white/[0.03] p-4 flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-white/10 border border-white/15 text-[12px] font-medium text-white flex items-center justify-center shrink-0 mt-0.5">
+                    1
+                  </span>
+                  <div>
+                    <div className="text-[13.5px] font-medium text-white">
+                      Get your free Hugging Face Read token
+                    </div>
+                    <p className="text-[12px] text-white/55 mt-0.5">
+                      Sign in free → click Create token → copy the <code className="font-mono text-white/80">hf_...</code> key.
+                    </p>
+                  </div>
+                </div>
                 <a
                   href="https://huggingface.co/settings/tokens/new?tokenType=read"
                   target="_blank"
                   rel="noreferrer"
-                  className="flow-btn-glass inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                  className="flow-btn-glass inline-flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium shrink-0"
                 >
-                  Get Free Token ($0)
-                  <ExternalLink className="w-3 h-3 stroke-[1.6]" />
+                  Get Token
+                  <ExternalLink className="w-3.5 h-3.5 stroke-[1.6]" />
                 </a>
               </div>
-              <p className="text-[11px] text-white/55 leading-[16px]">
-                ZeroGPU blocks anonymous video requests immediately. A free Read token unlocks real
-                Wan 2.2 14B, LTX-Video &amp; MMAudio directly in your browser (no credit card).
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    data-testid="hf-token-input"
-                    autoComplete="off"
-                    value={draft.hfToken}
-                    onChange={(e) => {
-                      setDraft({ ...draft, hfToken: e.target.value });
-                      setHfStatus(null);
-                    }}
-                    placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
-                  />
+
+              {/* Step 2 */}
+              <div className="rounded-[14px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-white/10 border border-white/15 text-[12px] font-medium text-white flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <div className="text-[13.5px] font-medium text-white">
+                    Paste token &amp; connect
+                  </div>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      data-testid="hf-token-input"
+                      autoComplete="off"
+                      value={draft.hfToken}
+                      onChange={(e) => {
+                        setDraft({ ...draft, hfToken: e.target.value });
+                        setHfStatus(null);
+                      }}
+                      placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      className="flow-input w-full pl-9 pr-3 py-2.5 text-[13px] font-mono"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="hf-verify-btn"
+                    disabled={testingHf || !draft.hfToken.trim()}
+                    onClick={() => void handleTestHf()}
+                    className="flow-cta-primary flex items-center gap-1.5 px-4 py-2.5 text-[12.5px] disabled:opacity-40 cursor-pointer shrink-0"
+                  >
+                    {testingHf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    Connect
+                  </button>
+                </div>
+
+                {hfStatus && !hfStatus.valid && (
+                  <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] bg-[#b22f25]/20 border border-[#fe6e6e]/40 text-[#fe6e6e]">
+                    <XCircle className="w-4 h-4 shrink-0" />
+                    <span>{hfStatus.error}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsed Advanced Options */}
+              <div>
                 <button
                   type="button"
-                  data-testid="hf-verify-btn"
-                  disabled={testingHf || !draft.hfToken.trim()}
-                  onClick={() => void handleTestHf()}
-                  className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer shrink-0"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="inline-flex items-center gap-1.5 text-[12px] text-white/55 hover:text-white transition cursor-pointer"
                 >
-                  {testingHf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                  Verify Token
-                </button>
-              </div>
-              {hfStatus && (
-                <div
-                  className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${hfStatus.valid
-                    ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                    : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                    }`}
-                >
-                  {hfStatus.valid ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                      <span>
-                        Verified <strong>{hfStatus.account}</strong> — 5× Free ZeroGPU Video Quota active!
-                      </span>
-                    </>
+                  {showAdvanced ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
                   ) : (
-                    <>
-                      <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
-                      <span>{hfStatus.error}</span>
-                    </>
+                    <ChevronRight className="w-3.5 h-3.5" />
                   )}
-                </div>
-              )}
-            </div>
+                  <span>Advanced model &amp; audio options</span>
+                </button>
 
-            <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[12px] bg-black/45 border border-white/15 text-[12px] text-white/85 cursor-pointer">
-              <input
-                type="checkbox"
-                data-testid="free-auto-audio-toggle"
-                checked={draft.freeAutoAudio}
-                onChange={(e) => setDraft({ ...draft, freeAutoAudio: e.target.checked })}
-                className="accent-white"
-              />
-              <Volume2 className="w-4 h-4 stroke-[1.6] text-[#29c58f] shrink-0" />
-              <span>
-                <strong className="font-medium text-white">
-                  Auto-Sync AI Foley &amp; Sound Effects ($0 MMAudio)
-                </strong>{' '}
-                — analyzes generated video frames and muxes realistic synced audio.
-              </span>
-            </label>
-          </div>
+                {showAdvanced && (
+                  <div className="mt-3 rounded-[14px] border border-white/15 bg-black/40 p-3.5 space-y-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11.5px] text-white/60 mb-1">
+                          Keyframe Image Model
+                        </label>
+                        <select
+                          data-testid="free-image-model-select"
+                          value={draft.freeImageModel}
+                          onChange={(e) =>
+                            setDraft({ ...draft, freeImageModel: e.target.value as FreeImageModel })
+                          }
+                          className="flow-input w-full px-3 py-2 text-[12px] cursor-pointer"
+                        >
+                          <option value="flux" className="bg-[#131314]">FLUX.1-schnell (Default)</option>
+                          <option value="flux-dev" className="bg-[#131314]">FLUX.1-dev Pro</option>
+                          <option value="sd35-turbo" className="bg-[#131314]">SD 3.5 Large Turbo</option>
+                          <option value="turbo" className="bg-[#131314]">Pollinations Turbo (No Token)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] text-white/60 mb-1">
+                          Video Engine Mode
+                        </label>
+                        <select
+                          value={draft.freeVideoFallback}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              freeVideoFallback: e.target.value as 'hf-ltx-space' | 'ken-burns-local',
+                            })
+                          }
+                          className="flow-input w-full px-3 py-2 text-[12px] cursor-pointer"
+                        >
+                          <option value="hf-ltx-space" className="bg-[#131314]">
+                            LTX-2.5 22B + Wan 2.2 14B
+                          </option>
+                          <option value="ken-burns-local" className="bg-[#131314]">
+                            Still Pan/Zoom Only (No AI Video)
+                          </option>
+                        </select>
+                      </div>
+                    </div>
 
-          {/* Engine 2 Config (Colab T4 Bridge) */}
-          <div className="rounded-[16px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[13px] font-medium text-white">
-                Google Colab T4 16 GB Tunnel Setup ($0 Dedicated GPU)
+                    <label className="flex items-center gap-2 text-[12px] text-white/80 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        data-testid="free-auto-audio-toggle"
+                        checked={draft.freeAutoAudio}
+                        onChange={(e) => setDraft({ ...draft, freeAutoAudio: e.target.checked })}
+                        className="accent-white"
+                      />
+                      <Volume2 className="w-3.5 h-3.5 text-[#29c58f] shrink-0" />
+                      <span>Add MMAudio Foley on silent fallback clips (LTX-2.5 already has native audio)</span>
+                    </label>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href="https://colab.research.google.com/github/almarsancare-maker/flow-studio-pwa/blob/main/colab/FlowStudio_Colab_T4_Backend.ipynb"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flow-cta-primary flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
-                >
-                  Open in Colab
-                  <ExternalLink className="w-3 h-3 stroke-[1.8]" />
-                </a>
-                <a
-                  href="/FlowStudio_Colab_T4_Backend.ipynb"
-                  download="FlowStudio_Colab_T4_Backend.ipynb"
-                  className="flow-btn-glass flex items-center gap-1.5 px-3 py-1.5 text-[11px]"
-                >
-                  <Download className="w-3 h-3 stroke-[1.6]" />
-                  Download Notebook
-                </a>
-              </div>
             </div>
+          )}
 
-            <ol className="text-[12px] text-white/60 space-y-1 list-decimal list-inside leading-[18px]">
-              <li>
-                Open the notebook in Colab and confirm <strong className="text-white font-medium">Runtime → T4 GPU</strong>.
-              </li>
-              <li>
-                Run <strong className="text-white font-medium">Runtime → Run all</strong> (~45s).
-              </li>
-              <li>
-                Paste the <code className="font-mono text-white/85">https://*.trycloudflare.com</code> URL below and click Test Connection.
-              </li>
-            </ol>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="url"
-                value={draft.colabUrl}
-                onChange={(e) => setDraft({ ...draft, colabUrl: e.target.value })}
-                placeholder="https://your-random-slug.trycloudflare.com"
-                className="flow-input flex-1 px-3 py-2 text-[12px] font-mono"
-              />
-              <button
-                type="button"
-                disabled={testingColab || !draft.colabUrl.trim()}
-                onClick={() => void handleTestColab()}
-                className="flow-btn-glass flex items-center gap-1.5 px-4 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer shrink-0"
-              >
-                {testingColab ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                Test Connection
-              </button>
-            </div>
-
-            {colabHealth && (
+          {/* ═══ TAB 2: FREE GOOGLE COLAB T4 GPU (3 SIMPLE STEPS) ═══ */}
+          {tab === 'colab' && (
+            <div className="space-y-4">
+              {/* Live Status Pill */}
               <div
-                className={`flex items-center gap-2 text-[12px] px-3.5 py-2.5 rounded-[12px] border ${colabHealth.online
-                  ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                  : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                  }`}
+                className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-[14px] border text-[12px] ${
+                  colabHealth?.online
+                    ? 'bg-[#29c58f]/10 border-[#29c58f]/35 text-white'
+                    : 'bg-white/[0.04] border-white/15 text-white/80'
+                }`}
               >
-                {colabHealth.online ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                    <span>
-                      Connected: <strong>{colabHealth.gpuName}</strong> ({colabHealth.vramFreeGb}/
-                      {colabHealth.vramTotalGb} GB VRAM free)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
-                    <span>{colabHealth.error || 'Could not reach Colab tunnel.'}</span>
-                  </>
-                )}
-              </div>
-            )}
-
-            <div className="grid sm:grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-[12px] text-white/60 mb-1.5">Colab Image Model</label>
-                <select
-                  value={draft.colabModelImage}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      colabModelImage: e.target.value as EngineSettings['colabModelImage'],
-                    })
-                  }
-                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
-                >
-                  <option value="sdxl-turbo" className="bg-[#131314]">SDXL-Turbo (~2s per keyframe)</option>
-                  <option value="sdxl-base" className="bg-[#131314]">SDXL 1.0 Base (1024px Photorealistic)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] text-white/60 mb-1.5">Colab Video Model</label>
-                <select
-                  value={draft.colabModelVideo}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      colabModelVideo: e.target.value as EngineSettings['colabModelVideo'],
-                    })
-                  }
-                  className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
-                >
-                  <option value="wan2.2-5b" className="bg-[#131314]">
-                    Wan 2.2 TI2V-5B (Best Free T4 · Apache 2.0 T2V/I2V)
-                  </option>
-                  <option value="ltx-0.9.7-distilled" className="bg-[#131314]">
-                    LTX-Video 0.9.7 Distilled (Fast 8-Step · T2V/I2V/FLF)
-                  </option>
-                  <option value="wan2.1-1.3b" className="bg-[#131314]">
-                    Wan2.1-1.3B (High-Motion Open T2V)
-                  </option>
-                  <option value="cogvideox-2b" className="bg-[#131314]">
-                    CogVideoX-2B (T4 16GB T2V)
-                  </option>
-                  <option value="ltx-video" className="bg-[#131314]">
-                    LTX-Video 0.9.5 Legacy
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[12px] bg-black/45 border border-white/15 text-[12px] text-white/85 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={draft.colabAudio}
-                onChange={(e) => setDraft({ ...draft, colabAudio: e.target.checked })}
-                className="accent-white"
-              />
-              <Volume2 className="w-4 h-4 stroke-[1.6] text-[#29c58f] shrink-0" />
-              <span>
-                <strong className="font-medium text-white">
-                  Generate Synchronized AI Audio on T4 GPU ($0 AudioLDM2 + FFmpeg)
-                </strong>{' '}
-                — muxes realistic foley &amp; ambient sound directly into the Colab MP4.
-              </span>
-            </label>
-          </div>
-
-          {/* Collapsible Optional Paid BYOK Cloud APIs */}
-          <div className="rounded-[16px] border border-white/15 bg-white/[0.02] overflow-hidden">
-            <button
-              type="button"
-              data-testid="toggle-paid-apis-btn"
-              onClick={() => setShowPaidApis((v) => !v)}
-              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition cursor-pointer"
-            >
-              <div className="flex items-center gap-2 text-[13px] text-white/80">
-                {showPaidApis ? (
-                  <ChevronDown className="w-4 h-4 stroke-[1.6] text-white/60" />
-                ) : (
-                  <ChevronRight className="w-4 h-4 stroke-[1.6] text-white/50" />
-                )}
-                <span className="font-medium">
-                  Optional Paid Cloud APIs (BYOK — Gemini Omni 1.2 &amp; Seedance 2.5)
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      colabHealth?.online ? 'bg-[#29c58f]' : 'bg-[#f59e0b]'
+                    }`}
+                  />
+                  <span className="truncate">
+                    {colabHealth?.online ? (
+                      <>
+                        Connected: <strong>{colabHealth.gpuName}</strong> ({colabHealth.vramFreeGb}/
+                        {colabHealth.vramTotalGb} GB VRAM)
+                      </>
+                    ) : (
+                      <>
+                        Runs <strong>Wan 2.2 TI2V-5B</strong> on Google&apos;s free 16 GB T4 · No training
+                      </>
+                    )}
+                  </span>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#29c58f] shrink-0">
+                  $0 · NO QUOTA
                 </span>
               </div>
-              <span className="text-[11px] px-2.5 py-0.5 rounded-[32px] bg-white/8 text-white/55">
-                Optional
-              </span>
-            </button>
 
-            {showPaidApis && (
-              <div className="p-4 pt-3 space-y-3 border-t border-white/15">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Step 1 & 2 Combined Card */}
+              <div className="rounded-[14px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-white/10 border border-white/15 text-[12px] font-medium text-white flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <div>
+                      <div className="text-[13.5px] font-medium text-white">
+                        Open the ready-made Colab GPU notebook
+                      </div>
+                      <p className="text-[12px] text-white/55 mt-0.5">
+                        Click <strong className="text-white/85">Runtime → Run all</strong> (~60s) and copy the printed <code className="font-mono text-white/80">trycloudflare.com</code> link.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      href="https://colab.research.google.com/github/almarsancare-maker/flow-studio-pwa/blob/main/colab/FlowStudio_Colab_T4_Backend.ipynb"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flow-btn-glass inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium"
+                    >
+                      Open Colab
+                      <ExternalLink className="w-3.5 h-3.5 stroke-[1.6]" />
+                    </a>
+                    <a
+                      href="/FlowStudio_Colab_T4_Backend.ipynb"
+                      download="FlowStudio_Colab_T4_Backend.ipynb"
+                      title="Download .ipynb notebook"
+                      className="flow-btn-glass p-2"
+                    >
+                      <Download className="w-3.5 h-3.5 stroke-[1.6]" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Paste & Connect */}
+              <div className="rounded-[14px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-white/10 border border-white/15 text-[12px] font-medium text-white flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <div className="text-[13.5px] font-medium text-white">
+                    Paste your tunnel link &amp; connect
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={draft.colabUrl}
+                    onChange={(e) => setDraft({ ...draft, colabUrl: e.target.value })}
+                    placeholder="https://your-slug.trycloudflare.com"
+                    className="flow-input flex-1 px-3 py-2.5 text-[13px] font-mono"
+                  />
                   <button
                     type="button"
-                    data-testid="select-engine-omni"
-                    onClick={() => setDraft({ ...draft, activeEngine: 'gemini-omni' })}
-                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${draft.activeEngine === 'gemini-omni'
-                      ? 'border-white bg-white/10'
-                      : 'border-white/15 bg-white/5 hover:border-white/25'
-                      }`}
+                    disabled={testingColab || !draft.colabUrl.trim()}
+                    onClick={() => void handleTestColab()}
+                    className="flow-cta-primary flex items-center gap-1.5 px-4 py-2.5 text-[12.5px] disabled:opacity-40 cursor-pointer shrink-0"
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[13px] font-medium text-white flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 stroke-[1.6] text-[#c2e7ff] shrink-0" />
-                        Omni 1.2 Flash
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-[32px] bg-white/10 text-white/75 shrink-0">
-                        Paid BYOK
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-white/55 mt-1">
-                      Requires billed Google AI Studio key (~$0.023–$0.209/s).
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="select-engine-seedance"
-                    onClick={() => setDraft({ ...draft, activeEngine: 'seedance-byok' })}
-                    className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${draft.activeEngine === 'seedance-byok'
-                      ? 'border-white bg-white/10'
-                      : 'border-white/15 bg-white/5 hover:border-white/25'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[13px] font-medium text-white flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5 stroke-[1.6] text-[#9e9eff] shrink-0" />
-                        Seedance 2.5
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-[32px] bg-white/10 text-white/75 shrink-0">
-                        Paid BYOK
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-white/55 mt-1">
-                      Requires funded Replicate / fal.ai balance.
-                    </p>
+                    {testingColab ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    Connect
                   </button>
                 </div>
 
-                {/* Engine 3 Config: Official Google Gemini Omni 1.2 Flash */}
-                <div className="rounded-[14px] border border-white/15 bg-black/40 p-3.5 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 stroke-[1.6] text-[#c2e7ff]" />
-                      Google Gemini Omni 1.2 Flash (3s–15s · 360p–4K)
+                {colabHealth && !colabHealth.online && (
+                  <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] bg-[#b22f25]/20 border border-[#fe6e6e]/40 text-[#fe6e6e]">
+                    <XCircle className="w-4 h-4 shrink-0" />
+                    <span>{colabHealth.error || 'Could not reach Colab tunnel.'}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsed Advanced Colab Options */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="inline-flex items-center gap-1.5 text-[12px] text-white/55 hover:text-white transition cursor-pointer"
+                >
+                  {showAdvanced ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  )}
+                  <span>Advanced Colab model options</span>
+                </button>
+
+                {showAdvanced && (
+                  <div className="mt-3 rounded-[14px] border border-white/15 bg-black/40 p-3.5 space-y-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11.5px] text-white/60 mb-1">
+                          Colab Video Model
+                        </label>
+                        <select
+                          value={draft.colabModelVideo}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              colabModelVideo: e.target.value as EngineSettings['colabModelVideo'],
+                            })
+                          }
+                          className="flow-input w-full px-3 py-2 text-[12px] cursor-pointer"
+                        >
+                          <option value="wan2.2-5b" className="bg-[#131314]">Wan 2.2 TI2V-5B (Default)</option>
+                          <option value="ltx-0.9.7-distilled" className="bg-[#131314]">LTX-Video 0.9.7 (8-Step / FLF)</option>
+                          <option value="wan2.1-1.3b" className="bg-[#131314]">Wan 2.1 1.3B</option>
+                          <option value="cogvideox-2b" className="bg-[#131314]">CogVideoX-2B</option>
+                          <option value="ltx-video" className="bg-[#131314]">LTX-Video 0.9.5</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] text-white/60 mb-1">
+                          Colab Image Model
+                        </label>
+                        <select
+                          value={draft.colabModelImage}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              colabModelImage: e.target.value as EngineSettings['colabModelImage'],
+                            })
+                          }
+                          className="flow-input w-full px-3 py-2 text-[12px] cursor-pointer"
+                        >
+                          <option value="sdxl-turbo" className="bg-[#131314]">SDXL-Turbo (Fast)</option>
+                          <option value="sdxl-base" className="bg-[#131314]">SDXL 1.0 Base (1024px)</option>
+                        </select>
+                      </div>
                     </div>
+
+                    <label className="flex items-center gap-2 text-[12px] text-white/80 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draft.colabAudio}
+                        onChange={(e) => setDraft({ ...draft, colabAudio: e.target.checked })}
+                        className="accent-white"
+                      />
+                      <Volume2 className="w-3.5 h-3.5 text-[#29c58f] shrink-0" />
+                      <span>Generate synchronized AI foley audio on T4 (AudioLDM2 + FFmpeg)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ TAB 3: OPTIONAL PAID PRO APIS (OMNI 1.2 / SEEDANCE 2.5) ═══ */}
+          {tab === 'pro' && (
+            <div className="space-y-4">
+              {/* Sub-choice: Omni 1.2 vs Seedance 2.5 */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  data-testid="select-engine-omni"
+                  onClick={() => {
+                    setProChoice('gemini-omni');
+                    setDraft((prev) => ({ ...prev, activeEngine: 'gemini-omni' }));
+                  }}
+                  className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${
+                    proChoice === 'gemini-omni'
+                      ? 'border-white bg-white/10'
+                      : 'border-white/15 bg-white/[0.03] hover:border-white/25'
+                  }`}
+                >
+                  <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#c2e7ff]" />
+                    Gemini Omni 1.2
+                  </div>
+                  <div className="text-[11px] text-white/55 mt-0.5">Google AI Studio key · 4K + Audio</div>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="select-engine-seedance"
+                  onClick={() => {
+                    setProChoice('seedance-byok');
+                    setDraft((prev) => ({ ...prev, activeEngine: 'seedance-byok' }));
+                  }}
+                  className={`text-left p-3 rounded-[14px] border transition cursor-pointer ${
+                    proChoice === 'seedance-byok'
+                      ? 'border-white bg-white/10'
+                      : 'border-white/15 bg-white/[0.03] hover:border-white/25'
+                  }`}
+                >
+                  <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-[#9e9eff]" />
+                    Seedance 2.5
+                  </div>
+                  <div className="text-[11px] text-white/55 mt-0.5">Replicate / fal.ai key</div>
+                </button>
+              </div>
+
+              {proChoice === 'gemini-omni' ? (
+                <div className="rounded-[14px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-white">Google AI Studio Key</span>
                     <a
                       href="https://aistudio.google.com/apikey"
                       target="_blank"
                       rel="noreferrer"
-                      className="flow-btn-glass flex items-center gap-1 px-3 py-1 text-[11px]"
+                      className="flow-btn-glass inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
                     >
-                      Get Google AI Studio Key
-                      <ExternalLink className="w-3 h-3 stroke-[1.6]" />
+                      Get Key <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
 
                   {serverKeys.gemini && (
-                    <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-white/5 text-white">
+                    <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-[#29c58f]/10 text-white">
                       <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                      <span>Encrypted Server Key active for Google Gemini API.</span>
+                      <span>Server key active for Gemini Omni 1.2.</span>
                     </div>
                   )}
 
-                  <div className="grid sm:grid-cols-3 gap-2.5 items-end">
-                    <div>
-                      <label className="block text-[11px] text-white/60 mb-1">
-                        Omni 1.2 Resolution
-                      </label>
-                      <select
-                        data-testid="omni-resolution-select"
-                        value={draft.omniResolution}
-                        onChange={(e) =>
-                          setDraft({ ...draft, omniResolution: e.target.value as OmniResolution })
-                        }
-                        className="flow-input w-full px-2.5 py-2 text-[12px]"
-                      >
-                        <option value="360p" className="bg-[#131314]">360p Fast Preview</option>
-                        <option value="720p" className="bg-[#131314]">720p HD Default</option>
-                        <option value="1080p" className="bg-[#131314]">1080p Full HD</option>
-                        <option value="4k" className="bg-[#131314]">4K Ultra HD</option>
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2 flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="password"
-                          data-testid="omni-apikey-input"
-                          autoComplete="off"
-                          value={draft.geminiApiKey}
-                          onChange={(e) => setDraft({ ...draft, geminiApiKey: e.target.value })}
-                          placeholder={
-                            serverKeys.gemini
-                              ? 'Using server key (paste to override)'
-                              : 'AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-                          }
-                          className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        data-testid="omni-verify-btn"
-                        disabled={testingOmni || (!draft.geminiApiKey.trim() && !serverKeys.gemini)}
-                        onClick={() => void handleTestOmni()}
-                        className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40 shrink-0 cursor-pointer"
-                      >
-                        {testingOmni ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                        Verify Key
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      data-testid="omni-resolution-select"
+                      value={draft.omniResolution}
+                      onChange={(e) =>
+                        setDraft({ ...draft, omniResolution: e.target.value as OmniResolution })
+                      }
+                      className="flow-input px-2.5 py-2.5 text-[12px] shrink-0 cursor-pointer"
+                    >
+                      <option value="360p" className="bg-[#131314]">360p</option>
+                      <option value="720p" className="bg-[#131314]">720p</option>
+                      <option value="1080p" className="bg-[#131314]">1080p</option>
+                      <option value="4k" className="bg-[#131314]">4K</option>
+                    </select>
+                    <input
+                      type="password"
+                      data-testid="omni-apikey-input"
+                      autoComplete="off"
+                      value={draft.geminiApiKey}
+                      onChange={(e) => setDraft({ ...draft, geminiApiKey: e.target.value })}
+                      placeholder="AIzaSyxxxxxxxxxxxxxxxxxxxxxxx"
+                      className="flow-input flex-1 px-3 py-2.5 text-[12.5px] font-mono min-w-0"
+                    />
+                    <button
+                      type="button"
+                      data-testid="omni-verify-btn"
+                      disabled={testingOmni || (!draft.geminiApiKey.trim() && !serverKeys.gemini)}
+                      onClick={() => void handleTestOmni()}
+                      className="flow-cta-primary flex items-center gap-1.5 px-4 py-2.5 text-[12.5px] disabled:opacity-40 cursor-pointer shrink-0"
+                    >
+                      {testingOmni ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      Connect
+                    </button>
                   </div>
 
                   {omniStatus && (
                     <div
-                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${omniStatus.valid
-                        ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                        : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                        }`}
+                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
+                        omniStatus.valid
+                          ? 'bg-[#29c58f]/10 border-[#29c58f]/40 text-white'
+                          : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                      }`}
                     >
                       {omniStatus.valid ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                          <span>
-                            Verified: <strong>{omniStatus.account}</strong> — Gemini Omni 1.2 active!
-                          </span>
-                        </>
+                        <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
                       ) : (
-                        <>
-                          <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
-                          <span>{omniStatus.error}</span>
-                        </>
+                        <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
                       )}
+                      <span>
+                        {omniStatus.valid
+                          ? `Connected: ${omniStatus.account}`
+                          : omniStatus.error}
+                      </span>
                     </div>
                   )}
                 </div>
-
-                {/* Engine 4 Config: Official ByteDance Seedance (BYOK) */}
-                <div className="rounded-[14px] border border-white/15 bg-black/40 p-3.5 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[13px] font-medium text-white flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 stroke-[1.6] text-[#9e9eff]" />
-                      ByteDance Seedance (2.5 / 2.0 BYOK)
-                    </div>
+              ) : (
+                <div className="rounded-[14px] border border-white/15 bg-white/[0.03] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-white">Seedance API Key</span>
                     <div className="flex items-center gap-1.5">
                       <a
                         href="https://replicate.com/account/api-tokens"
                         target="_blank"
                         rel="noreferrer"
-                        className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                        className="flow-btn-glass inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
                       >
-                        Replicate Key
-                        <ExternalLink className="w-3 h-3 stroke-[1.6]" />
+                        Replicate <ExternalLink className="w-3 h-3" />
                       </a>
                       <a
                         href="https://fal.ai/dashboard/keys"
                         target="_blank"
                         rel="noreferrer"
-                        className="flow-btn-glass flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                        className="flow-btn-glass inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
                       >
-                        fal.ai Key
-                        <ExternalLink className="w-3 h-3 stroke-[1.6]" />
+                        fal.ai <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </div>
 
-                  <div className="grid sm:grid-cols-3 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] text-white/60 mb-1">API Provider</label>
-                      <select
-                        data-testid="seedance-provider-select"
-                        value={draft.seedanceProvider}
-                        onChange={(e) => handleProviderChange(e.target.value as SeedanceProvider)}
-                        className="flow-input w-full px-2.5 py-2 text-[12px]"
-                      >
-                        <option value="replicate" className="bg-[#131314]">Replicate (Recommended)</option>
-                        <option value="fal" className="bg-[#131314]">fal.ai Queue API</option>
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-white/60 mb-1">
-                        Seedance Model Version
-                      </label>
-                      <select
-                        data-testid="seedance-model-select"
-                        value={draft.seedanceModel}
-                        onChange={(e) => setDraft({ ...draft, seedanceModel: e.target.value })}
-                        className="flow-input w-full px-2.5 py-2 text-[12px]"
-                      >
-                        {activeSeedanceModels.map((m) => (
-                          <option key={m.id} value={m.id} className="bg-[#131314]">
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      data-testid="seedance-provider-select"
+                      value={draft.seedanceProvider}
+                      onChange={(e) => handleProviderChange(e.target.value as SeedanceProvider)}
+                      className="flow-input px-2.5 py-2 text-[12px] cursor-pointer"
+                    >
+                      <option value="replicate" className="bg-[#131314]">Replicate</option>
+                      <option value="fal" className="bg-[#131314]">fal.ai</option>
+                    </select>
+                    <select
+                      data-testid="seedance-model-select"
+                      value={draft.seedanceModel}
+                      onChange={(e) => setDraft({ ...draft, seedanceModel: e.target.value })}
+                      className="flow-input col-span-2 px-2.5 py-2 text-[12px] cursor-pointer"
+                    >
+                      {activeSeedanceModels.map((m) => (
+                        <option key={m.id} value={m.id} className="bg-[#131314]">
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-
-                  <div className="grid sm:grid-cols-3 gap-2.5 items-end">
-                    <div>
-                      <label className="block text-[11px] text-white/60 mb-1">
-                        Video Resolution
-                      </label>
-                      <select
-                        value={draft.seedanceResolution}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            seedanceResolution: e.target.value as SeedanceResolution,
-                          })
-                        }
-                        className="flow-input w-full px-2.5 py-2 text-[12px]"
-                      >
-                        <option value="480p" className="bg-[#131314]">480p (Fastest)</option>
-                        <option value="720p" className="bg-[#131314]">720p HD (Balanced)</option>
-                        <option value="1080p" className="bg-[#131314]">1080p Full HD</option>
-                      </select>
-                    </div>
-                    <label className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-[12px] bg-black/50 border border-white/15 text-[12px] text-white/85 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={draft.seedanceAudio}
-                        onChange={(e) => setDraft({ ...draft, seedanceAudio: e.target.checked })}
-                        className="accent-white"
-                      />
-                      <Volume2 className="w-3.5 h-3.5 stroke-[1.6] text-white/75" />
-                      <span>Generate Synchronized Native Audio</span>
-                    </label>
-                  </div>
-
-                  {((draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
-                    (draft.seedanceProvider === 'fal' && serverKeys.fal)) && (
-                      <div className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border border-[#29c58f]/35 bg-white/5 text-white">
-                        <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                        <span>
-                          Encrypted Server Key active for{' '}
-                          <strong>
-                            {draft.seedanceProvider === 'replicate' ? 'Replicate' : 'fal.ai'}
-                          </strong>
-                          .
-                        </span>
-                      </div>
-                    )}
 
                   <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <KeyRound className="w-3.5 h-3.5 text-white/45 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="password"
-                        data-testid="seedance-apikey-input"
-                        autoComplete="off"
-                        value={draft.seedanceApiKey}
-                        onChange={(e) => setDraft({ ...draft, seedanceApiKey: e.target.value })}
-                        placeholder={
-                          (draft.seedanceProvider === 'replicate' && serverKeys.replicate) ||
-                            (draft.seedanceProvider === 'fal' && serverKeys.fal)
-                            ? 'Using server key (paste to override)'
-                            : draft.seedanceProvider === 'replicate'
-                              ? 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-                              : 'xxxxxxxx-xxxx-xxxx:xxxxxxxxxxxxxxxx'
-                        }
-                        className="flow-input w-full pl-8 pr-3 py-2 text-[12px] font-mono"
-                      />
-                    </div>
+                    <select
+                      value={draft.seedanceResolution}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          seedanceResolution: e.target.value as SeedanceResolution,
+                        })
+                      }
+                      className="flow-input px-2.5 py-2.5 text-[12px] shrink-0 cursor-pointer"
+                    >
+                      <option value="480p" className="bg-[#131314]">480p</option>
+                      <option value="720p" className="bg-[#131314]">720p</option>
+                      <option value="1080p" className="bg-[#131314]">1080p</option>
+                    </select>
+                    <input
+                      type="password"
+                      data-testid="seedance-apikey-input"
+                      autoComplete="off"
+                      value={draft.seedanceApiKey}
+                      onChange={(e) => setDraft({ ...draft, seedanceApiKey: e.target.value })}
+                      placeholder={
+                        hasServerSeedance
+                          ? 'Server key active (optional override)'
+                          : draft.seedanceProvider === 'replicate'
+                          ? 'r8_xxxxxxxxxxxxxxxxxxxxxxx'
+                          : 'key_id:key_secret'
+                      }
+                      className="flow-input flex-1 px-3 py-2.5 text-[12.5px] font-mono min-w-0"
+                    />
                     <button
                       type="button"
                       data-testid="seedance-verify-btn"
                       disabled={
-                        testingSeedance ||
-                        (!draft.seedanceApiKey.trim() &&
-                          !(draft.seedanceProvider === 'replicate'
-                            ? serverKeys.replicate
-                            : serverKeys.fal))
+                        testingSeedance || (!draft.seedanceApiKey.trim() && !hasServerSeedance)
                       }
                       onClick={() => void handleTestSeedance()}
-                      className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40 cursor-pointer shrink-0"
+                      className="flow-cta-primary flex items-center gap-1.5 px-4 py-2.5 text-[12.5px] disabled:opacity-40 cursor-pointer shrink-0"
                     >
                       {testingSeedance ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                      Verify Key
+                      Connect
                     </button>
                   </div>
 
+                  <label className="flex items-center gap-2 text-[12px] text-white/80 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.seedanceAudio}
+                      onChange={(e) => setDraft({ ...draft, seedanceAudio: e.target.checked })}
+                      className="accent-white"
+                    />
+                    <Volume2 className="w-3.5 h-3.5 text-white/75" />
+                    <span>Native synchronized audio</span>
+                  </label>
+
                   {seedanceStatus && (
                     <div
-                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${seedanceStatus.valid
-                        ? 'bg-white/5 border-[#29c58f]/40 text-white'
-                        : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
-                        }`}
+                      className={`flex items-center gap-2 text-[12px] px-3 py-2 rounded-[10px] border ${
+                        seedanceStatus.valid
+                          ? 'bg-[#29c58f]/10 border-[#29c58f]/40 text-white'
+                          : 'bg-[#b22f25]/20 border-[#fe6e6e]/40 text-[#fe6e6e]'
+                      }`}
                     >
                       {seedanceStatus.valid ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
-                          <span>
-                            Key Verified: <strong>{seedanceStatus.account}</strong> — Seedance active!
-                          </span>
-                        </>
+                        <CheckCircle2 className="w-4 h-4 text-[#29c58f] shrink-0" />
                       ) : (
-                        <>
-                          <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
-                          <span>{seedanceStatus.error || 'Key validation failed.'}</span>
-                        </>
+                        <XCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
                       )}
+                      <span>
+                        {seedanceStatus.valid
+                          ? `Connected: ${seedanceStatus.account}`
+                          : seedanceStatus.error || 'Key validation failed.'}
+                      </span>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="px-6 py-4 border-t border-white/15 flex items-center justify-end gap-2.5">
+        {/* Clean Single-Action Footer */}
+        <div className="px-6 py-3.5 border-t border-white/15 flex items-center justify-between gap-3">
+          <span className="text-[11.5px] text-white/50">
+            Active:{' '}
+            <strong className="font-medium text-white/85">
+              {draft.activeEngine === 'colab-t4'
+                ? 'Free Colab GPU'
+                : draft.activeEngine === 'gemini-omni'
+                ? 'Gemini Omni 1.2'
+                : draft.activeEngine === 'seedance-byok'
+                ? 'Seedance 2.5'
+                : 'Free HF Cloud'}
+            </strong>
+          </span>
           <button
             type="button"
-            onClick={onClose}
-            className="flow-btn-glass px-4 py-2 text-[13px] font-medium cursor-pointer"
+            onClick={() => void handleSaveAndClose()}
+            className="flow-btn-glass px-4 py-2 text-[12.5px] font-medium cursor-pointer"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            className="flow-cta-primary px-5 py-2 text-[13px] cursor-pointer"
-          >
-            Save Engine Settings
+            Done
           </button>
         </div>
       </div>
