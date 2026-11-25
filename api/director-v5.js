@@ -379,8 +379,23 @@ export default async function handler(req, res) {
           runtimeContext,
         });
         const parsed = parseDirectorV5Output(poll.text);
-        // Enforce Tier 2 Menu Law: only accept Pollinations output if it produced a valid clickable menu
-        if (parsed.options.length >= 2) {
+        // Enforce v5.0.3 Structural Quality Guard on 20B zero-key fallback outputs:
+        // must carry a valid clickable menu AND required artifacts for Express/BUILD/Shot turns
+        const expectsBuildKit = sessionState.stage === 'build_gate' && (userInput === '1' || /\b(BUILD|YES|GO)\b/i.test(userInput));
+        const expectsExpressGate = sessionState.stage === 'await_express_source';
+        const expectsShotCard = det.nextState.stage === 'shots';
+
+        const passesGuard =
+          parsed.options.length >= 2 &&
+          (!expectsExpressGate || parsed.stage === 'build_gate') &&
+          (!expectsBuildKit ||
+            (Boolean(parsed.checksStamp) &&
+              parsed.promptBlocks.some((b) => b.generationKind !== 'meta' && b.attachLine))) &&
+          (!expectsShotCard ||
+            (Boolean(parsed.acceptanceCard) &&
+              parsed.promptBlocks.some((b) => b.generationKind === 'video')));
+
+        if (passesGuard) {
           return res.status(200).json({
             ok: true,
             version: MASTER_PROMPT_V503_VERSION,
@@ -391,7 +406,7 @@ export default async function handler(req, res) {
             ...parsed,
           });
         }
-        pollWarning = 'Pollinations output omitted clickable menu — applied v5.0.3 Ironclad compiler';
+        pollWarning = 'Pollinations 20B output missed v5.0.3 structural lock — served Ironclad v5.0.3 compiler';
       } catch (pollErr) {
         cooldownSec = pollErr?.cooldownSec ?? null;
         pollWarning = pollErr?.message || 'Pollinations unavailable';
