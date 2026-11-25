@@ -123,7 +123,7 @@ export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   hfToken: '',
   colabUrl: '',
   colabModelImage: 'sdxl-turbo',
-  colabModelVideo: 'wan2.2-5b',
+  colabModelVideo: 'cogvideox-2b',
   colabAudio: true,
   freeImageModel: 'flux',
   freeVideoFallback: 'hf-ltx-space',

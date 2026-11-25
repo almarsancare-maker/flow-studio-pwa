@@ -515,7 +515,7 @@ export function EngineModal({
                       </>
                     ) : (
                       <>
-                        Runs <strong>Wan 2.2 TI2V-5B</strong> on Google&apos;s free 16 GB T4 · No training
+                        Runs <strong>CogVideoX-2B &amp; LTX-Video 2B</strong> on Google&apos;s free 16 GB T4 · Zero-OOM
                       </>
                     )}
                   </span>
@@ -633,11 +633,8 @@ export function EngineModal({
                           }
                           className="flow-input w-full px-3 py-2 text-[12px] cursor-pointer"
                         >
-                          <option value="wan2.2-5b" className="bg-[#131314]">Wan 2.2 TI2V-5B (Default)</option>
-                          <option value="ltx-0.9.7-distilled" className="bg-[#131314]">LTX-Video 0.9.7 (8-Step / FLF)</option>
-                          <option value="wan2.1-1.3b" className="bg-[#131314]">Wan 2.1 1.3B</option>
-                          <option value="cogvideox-2b" className="bg-[#131314]">CogVideoX-2B</option>
-                          <option value="ltx-video" className="bg-[#131314]">LTX-Video 0.9.5</option>
+                          <option value="cogvideox-2b" className="bg-[#131314]">CogVideoX-2B (Fastest T4 Native FP16 · Default)</option>
+                          <option value="ltx-video" className="bg-[#131314]">LTX-Video 0.9.5 2B (24fps · T2V/I2V/FLF)</option>
                         </select>
                       </div>
                       <div>
