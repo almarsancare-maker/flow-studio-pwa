@@ -1036,12 +1036,12 @@ export default function App() {
 
     setShots((prev) => [...created.reverse(), ...prev]);
 
-    if (session && created[0]) {
+    if (session && created.length > 0) {
       const updatedSession: DirectorV5Session = {
         ...session,
         dispatchedJobs: {
           ...session.dispatchedJobs,
-          [block.id]: created[0].id,
+          [block.id]: created.map((c) => c.id),
         },
         updatedAt: Date.now(),
       };
@@ -1052,6 +1052,58 @@ export default function App() {
       takeCount > 1
         ? `Dispatched ${takeCount}× Quartet takes (${created.map((c) => c.label).join(', ')}) to Studio queue!`
         : `Dispatched ${created[0].label} (${block.assetFilename || kind.toUpperCase()}) to Studio queue!`
+    );
+  };
+
+  const handlePickDirectorQuartetWinner = async (
+    sessionId: string,
+    block: DirectorPromptBlock,
+    winnerShot: MediaShot
+  ) => {
+    const session = directorSessionsRef.current.find((s) => s.id === sessionId);
+    if (!session) return;
+    const filename =
+      block.assetFilename || `${(block.shotId || winnerShot.label).toUpperCase()}_f.jpg`;
+    const inferred = inferLedgerMetaFromFilename(filename);
+    let preview = winnerShot.thumbnailDataUrl;
+    if (!preview && winnerShot.blobKey) {
+      const b = await loadBlob(winnerShot.blobKey);
+      if (b) preview = await blobToDataUrl(b);
+    }
+    const nextLedger = mergeLedgerUpdates(
+      session.ledger,
+      [
+        {
+          filename,
+          token: inferred.token,
+          role: inferred.role,
+          status: 'APPROVED',
+          shotId: block.shotId,
+          linkedShotId: winnerShot.id,
+          previewDataUrl: preview,
+        },
+      ],
+      true
+    );
+    await handleSaveDirectorSession({
+      ...session,
+      ledger: nextLedger,
+      updatedAt: Date.now(),
+    });
+    showToast(`Locked ${winnerShot.label} as certified start frame ${filename}!`);
+  };
+
+  const handleSaveDirectorGeminiKey = async (rawKey: string) => {
+    const next: EngineSettings = {
+      ...engineSettings,
+      geminiApiKey: rawKey.trim(),
+    };
+    await saveEngineSettings(next);
+    setEngineSettings(next);
+    showToast(
+      next.geminiApiKey
+        ? 'Activated Gemini 2.5 Flash ($0 Free Tier) for full verbatim Director v5.0.3!'
+        : 'Cleared Gemini API key — Director v5 using $0 zero-key mode.'
     );
   };
 
@@ -1172,7 +1224,7 @@ export default function App() {
       )}
 
       {activeView === 'director' ? (
-        <main data-testid="director-main-canvas" className="flex-1 flex flex-col">
+        <main data-testid="director-main-canvas" className="flex-1 flex flex-col min-h-0">
           <DirectorV5View
             projectId={activeProjectId}
             sessions={directorSessions}
@@ -1186,6 +1238,17 @@ export default function App() {
             onSaveSession={handleSaveDirectorSession}
             onDeleteSession={handleDeleteDirectorSession}
             onDispatchPromptBlock={handleDispatchDirectorBlock}
+            onPickQuartetWinner={handlePickDirectorQuartetWinner}
+            onRetryShot={(shot) =>
+              void updateShotState({
+                ...shot,
+                status: 'queued',
+                progress: 5,
+                phase: 'Retrying...',
+                error: undefined,
+              })
+            }
+            onSaveGeminiKey={handleSaveDirectorGeminiKey}
             onSyncLedgerToBible={handleSyncLedgerToBible}
             onOpenLightbox={(shot) => setLightboxShotId(shot.id)}
             onOpenStudio={() => setActiveView('studio')}
@@ -1340,11 +1403,13 @@ export default function App() {
         onInjectStartFrame={(dataUrl, sourceLabel) => {
           setStartFrameDataUrl(dataUrl);
           setMode('i2v');
+          setActiveView('studio');
           showToast(`Locked ${sourceLabel} → Start Frame ready for next scene!`);
         }}
         onInjectEndFrame={(dataUrl, sourceLabel) => {
           setEndFrameDataUrl(dataUrl);
           setMode('i2v');
+          setActiveView('studio');
           showToast(`Locked ${sourceLabel} → End Frame interpolation ready!`);
         }}
         onUpdateSubtitle={(shot, subtitle) => {

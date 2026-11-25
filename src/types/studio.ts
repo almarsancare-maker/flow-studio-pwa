@@ -75,6 +75,7 @@ export interface DirectorSessionState {
   stage: string;
   presetKey: string | null;
   sourceText: string;
+  useProjectBible?: boolean;
   built: boolean;
   queueACardIdx: number;
   shotIdx: number;
@@ -107,7 +108,7 @@ export interface DirectorV5Session {
   state: DirectorSessionState;
   messages: DirectorV5Message[];
   ledger: DirectorAssetLedgerItem[];
-  dispatchedJobs: Record<string, string>;
+  dispatchedJobs: Record<string, string | string[]>;
   createdAt: number;
   updatedAt: number;
 }

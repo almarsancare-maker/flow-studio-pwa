@@ -7,14 +7,17 @@ import {
   CheckCircle2,
   Clapperboard,
   Copy,
+  ExternalLink,
   FileImage,
   Film,
   Image as ImageIcon,
+  KeyRound,
   Layers,
   Loader2,
   Lock,
   Paperclip,
   Plus,
+  RefreshCw,
   Send,
   ShieldCheck,
   Sparkles,
@@ -60,6 +63,13 @@ interface DirectorV5ViewProps {
     block: DirectorPromptBlock,
     takeCount?: 1 | 4
   ) => Promise<void>;
+  onPickQuartetWinner: (
+    sessionId: string,
+    block: DirectorPromptBlock,
+    winnerShot: MediaShot
+  ) => Promise<void>;
+  onRetryShot: (shot: MediaShot) => void;
+  onSaveGeminiKey: (apiKey: string) => Promise<void>;
   onSyncLedgerToBible: (items: DirectorAssetLedgerItem[]) => Promise<void>;
   onOpenLightbox: (shot: MediaShot) => void;
   onOpenStudio: () => void;
@@ -295,6 +305,9 @@ export function DirectorV5View({
   onSaveSession,
   onDeleteSession,
   onDispatchPromptBlock,
+  onPickQuartetWinner,
+  onRetryShot,
+  onSaveGeminiKey,
   onSyncLedgerToBible,
   onOpenLightbox,
   onOpenStudio,
@@ -310,6 +323,12 @@ export function DirectorV5View({
   const [manualFilename, setManualFilename] = useState('');
   const [bindingShotForId, setBindingShotForId] = useState<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [geminiBarOpen, setGeminiBarOpen] = useState(false);
+  const [geminiDraft, setGeminiDraft] = useState(engineSettings.geminiApiKey);
+
+  useEffect(() => {
+    setGeminiDraft(engineSettings.geminiApiKey);
+  }, [engineSettings.geminiApiKey]);
 
   const feedEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -873,7 +892,7 @@ export function DirectorV5View({
   return (
     <section
       data-testid="director-v5-view"
-      className="flex-1 flex flex-col max-w-[1536px] w-full mx-auto px-3 sm:px-6 md:px-8 pt-2 pb-4 min-h-0"
+      className="h-[calc(100dvh-116px)] md:h-[calc(100dvh-80px)] flex flex-col max-w-[1536px] w-full mx-auto px-3 sm:px-6 md:px-8 pt-2 pb-2 overflow-hidden"
     >
       {/* Hidden File Inputs */}
       <input
@@ -899,7 +918,8 @@ export function DirectorV5View({
       />
 
       {/* Top Director Control Bar */}
-      <div className="flow-card p-3 sm:px-4 mb-3 flex flex-wrap items-center justify-between gap-2.5">
+      <div className="flow-card p-3 sm:px-4 mb-2.5 shrink-0 space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <div className="flex items-center gap-2">
             <span className="w-7 h-7 rounded-full bg-[#c2e7ff]/15 border border-[#c2e7ff]/30 flex items-center justify-center shrink-0">
@@ -959,10 +979,11 @@ export function DirectorV5View({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* LLM Tier Pill */}
+          {/* LLM Tier Pill -> opens inline $0 Gemini 2.5 Flash Key Setup */}
           <button
             type="button"
-            onClick={onOpenEngine}
+            data-testid="director-gemini-toggle-btn"
+            onClick={() => setGeminiBarOpen((v) => !v)}
             title={
               geminiAvailable
                 ? 'Upgraded to $0 Free-Tier Gemini 2.5 Flash (full verbatim MASTER PROMPT v5.0.3)'
@@ -976,7 +997,7 @@ export function DirectorV5View({
           >
             <Sparkles className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">
-              {geminiAvailable ? 'Gemini 2.5 Flash ($0)' : 'Free Zero-Key ($0) · Upgrade'}
+              {geminiAvailable ? 'Gemini 2.5 Flash ($0)' : 'Free Zero-Key ($0) · Add Gemini Key'}
             </span>
             <span className="sm:hidden">{geminiAvailable ? 'Gemini 2.5' : 'Free $0'}</span>
           </button>
@@ -994,14 +1015,60 @@ export function DirectorV5View({
             </span>
           </button>
         </div>
+        </div>
+
+        {/* Inline Free Gemini 2.5 Flash Key Setup Drawer */}
+        {geminiBarOpen && (
+          <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center gap-2 text-[12px]">
+            <KeyRound className="w-3.5 h-3.5 text-[#c2e7ff] shrink-0" />
+            <span className="text-white/75">
+              Optional <strong className="text-white">$0 Free Gemini 2.5 Flash</strong> (full 130 KB verbatim v5.0.3):
+            </span>
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#c2e7ff] hover:underline inline-flex items-center gap-1 shrink-0"
+            >
+              Get Free Key <ExternalLink className="w-3 h-3" />
+            </a>
+            <div className="flex items-center gap-1.5 flex-1 min-w-[210px]">
+              <input
+                type="password"
+                autoComplete="off"
+                value={geminiDraft}
+                onChange={(e) => setGeminiDraft(e.target.value)}
+                placeholder="AIzaSy... (stored locally in IndexedDB)"
+                className="flow-input flex-1 min-w-0 px-2.5 py-1 text-[12px] font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  void onSaveGeminiKey(geminiDraft);
+                  setGeminiBarOpen(false);
+                }}
+                className="flow-cta-primary px-3 py-1 text-[11.5px] cursor-pointer shrink-0"
+              >
+                Save Key
+              </button>
+              <button
+                type="button"
+                onClick={() => setGeminiBarOpen(false)}
+                className="p-1 text-white/50 hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Main Responsive Two-Column Workspace */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* Left: Pipeline Feed + Composer */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
+      {/* Main Responsive Two-Column Workspace (locked viewport — zero overlap) */}
+      <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
+        {/* Left: Independent Scrollable Pipeline Feed + Solid Footer Composer */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
           {errorBanner && (
-            <div className="px-3.5 py-2.5 rounded-[14px] bg-[#b22f25]/20 border border-[#fe6e6e]/40 text-[12.5px] text-[#fe6e6e] flex items-center justify-between gap-2">
+            <div className="mb-2 px-3.5 py-2.5 rounded-[14px] bg-[#b22f25]/20 border border-[#fe6e6e]/40 text-[12.5px] text-[#fe6e6e] flex items-center justify-between gap-2 shrink-0">
               <span className="flex items-center gap-2 min-w-0">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="truncate">{errorBanner}</span>
@@ -1016,8 +1083,8 @@ export function DirectorV5View({
             </div>
           )}
 
-          {/* Conversation Stream */}
-          <div className="flex-1 space-y-4 pb-8" data-testid="director-message-feed">
+          {/* Scrollable Conversation Stream */}
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-4" data-testid="director-message-feed">
             {initializing && !activeSession ? (
               <div className="flow-card p-8 flex flex-col items-center justify-center gap-2 text-white/70">
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -1075,15 +1142,24 @@ export function DirectorV5View({
                     {actionableBlocks.length > 0 && (
                       <div className="space-y-3 pt-1">
                         {actionableBlocks.map((block) => {
-                          const dispatchedShotId = activeSession?.dispatchedJobs?.[block.id];
-                          const dispatchedShot = dispatchedShotId
-                            ? shotById.get(dispatchedShotId)
-                            : undefined;
+                          const rawJobRef = activeSession?.dispatchedJobs?.[block.id];
+                          const dispatchedIds = Array.isArray(rawJobRef)
+                            ? rawJobRef
+                            : rawJobRef
+                              ? [rawJobRef]
+                              : [];
+                          const dispatchedShots = dispatchedIds
+                            .map((id) => shotById.get(id))
+                            .filter((s): s is MediaShot => Boolean(s));
+                          const dispatchedShot = dispatchedShots[0];
                           const shotThumb =
                             dispatchedShot?.thumbnailDataUrl ||
                             (dispatchedShot?.blobKey
                               ? blobUrls[dispatchedShot.blobKey]
                               : undefined);
+                          const currentBoundShotId = block.assetFilename
+                            ? ledgerByFilename.get(block.assetFilename.toLowerCase())?.linkedShotId
+                            : undefined;
 
                           return (
                             <div
@@ -1146,32 +1222,137 @@ export function DirectorV5View({
                                 {block.copyText}
                               </pre>
 
-                              {/* Live Studio Render Status (when dispatched) */}
-                              {dispatchedShot && (
-                                <div className="rounded-[12px] border border-white/15 bg-white/[0.04] p-2.5 flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2.5 min-w-0">
+                              {/* Live Studio Render Status (Multi-Take Quartet 4x Gallery OR Single Shot Status) */}
+                              {dispatchedShots.length > 1 ? (
+                                <div
+                                  data-testid="director-quartet-gallery"
+                                  className="rounded-[12px] border border-white/15 bg-white/[0.03] p-2.5 space-y-2"
+                                >
+                                  <div className="flex items-center justify-between text-[11.5px] text-white/75">
+                                    <span>
+                                      Frame Quartet Candidates ({dispatchedShots.filter((s) => s.status === 'completed').length}/
+                                      {dispatchedShots.length} ready) — pick winner to lock{' '}
+                                      <code className="font-mono text-[#c2e7ff]">
+                                        {block.assetFilename || `${block.shotId || 'S1'}_f.jpg`}
+                                      </code>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={onOpenStudio}
+                                      className="text-white/70 hover:text-white inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      Studio <ArrowRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    {dispatchedShots.map((cand, cIdx) => {
+                                      const letter = String.fromCharCode(65 + cIdx);
+                                      const cThumb =
+                                        cand.thumbnailDataUrl ||
+                                        (cand.blobKey ? blobUrls[cand.blobKey] : undefined);
+                                      const isWinner = currentBoundShotId === cand.id;
+                                      return (
+                                        <div
+                                          key={cand.id}
+                                          data-testid={`quartet-candidate-${letter}`}
+                                          className={`rounded-[10px] border overflow-hidden bg-black/60 flex flex-col ${
+                                            isWinner ? 'border-[#29c58f]' : 'border-white/15'
+                                          }`}
+                                        >
+                                          <div
+                                            onClick={() => {
+                                              if (cand.status === 'completed') onOpenLightbox(cand);
+                                            }}
+                                            className={`aspect-video bg-[#131314] relative flex items-center justify-center ${
+                                              cand.status === 'completed' ? 'cursor-pointer' : ''
+                                            }`}
+                                          >
+                                            {cand.status === 'completed' && cThumb ? (
+                                              <img
+                                                src={cThumb}
+                                                alt={`Candidate ${letter}`}
+                                                className="w-full h-full object-cover"
+                                              />
+                                            ) : cand.status === 'failed' ? (
+                                              <div className="p-2 text-center space-y-1">
+                                                <AlertCircle className="w-4 h-4 text-[#fe6e6e] mx-auto" />
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onRetryShot(cand);
+                                                  }}
+                                                  className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-white cursor-pointer"
+                                                >
+                                                  Retry
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="text-center p-2">
+                                                <Loader2 className="w-4 h-4 animate-spin text-[#c2e7ff] mx-auto" />
+                                                <div className="text-[10px] text-white/60 mt-1">
+                                                  {cand.progress}%
+                                                </div>
+                                              </div>
+                                            )}
+                                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-black/70 text-[10px] font-mono text-white border border-white/15">
+                                              {letter} · {cand.label}
+                                            </span>
+                                          </div>
+                                          {cand.status === 'completed' && activeSession && (
+                                            <button
+                                              type="button"
+                                              data-testid={`quartet-pick-${letter}`}
+                                              onClick={() =>
+                                                void onPickQuartetWinner(activeSession.id, block, cand)
+                                              }
+                                              className={`w-full py-1 text-[10.5px] font-medium transition cursor-pointer ${
+                                                isWinner
+                                                  ? 'bg-[#29c58f] text-[#0b1b15]'
+                                                  : 'bg-white/8 text-white hover:bg-white/18'
+                                              }`}
+                                            >
+                                              {isWinner ? `✓ Locked ${letter}` : `Pick ${letter}`}
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : dispatchedShot ? (
+                                <div className="rounded-[12px] border border-white/15 bg-white/[0.04] p-2.5 flex flex-wrap items-center justify-between gap-2.5">
+                                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                     {dispatchedShot.status === 'completed' && shotThumb ? (
                                       <button
                                         type="button"
                                         onClick={() => onOpenLightbox(dispatchedShot)}
                                         className="w-12 h-9 rounded-[8px] overflow-hidden border border-white/20 shrink-0 cursor-pointer"
                                       >
-                                        <img
-                                          src={shotThumb}
-                                          alt={dispatchedShot.label}
-                                          className="w-full h-full object-cover"
-                                        />
+                                        {dispatchedShot.kind === 'video' && !dispatchedShot.thumbnailDataUrl ? (
+                                          <video
+                                            src={shotThumb}
+                                            muted
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <img
+                                            src={shotThumb}
+                                            alt={dispatchedShot.label}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        )}
                                       </button>
                                     ) : dispatchedShot.status === 'failed' ? (
                                       <AlertCircle className="w-4 h-4 text-[#fe6e6e] shrink-0" />
                                     ) : (
                                       <Loader2 className="w-4 h-4 text-[#c2e7ff] animate-spin shrink-0" />
                                     )}
-                                    <div className="min-w-0">
-                                      <div className="text-[12px] font-medium text-white truncate">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-[12px] font-medium text-white break-words">
                                         {dispatchedShot.status === 'completed' ? (
                                           <span className="inline-flex items-center gap-1 text-[#29c58f]">
-                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                                             Rendered {dispatchedShot.label} &amp; Auto-Bound to Ledger
                                           </span>
                                         ) : dispatchedShot.status === 'failed' ? (
@@ -1187,16 +1368,39 @@ export function DirectorV5View({
                                       </div>
                                     </div>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={onOpenStudio}
-                                    className="flow-btn-glass px-2.5 py-1 text-[11px] font-medium inline-flex items-center gap-1 shrink-0 cursor-pointer"
-                                  >
-                                    <span>Studio</span>
-                                    <ArrowRight className="w-3 h-3" />
-                                  </button>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {dispatchedShot.status === 'failed' && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => onRetryShot(dispatchedShot)}
+                                          className="flow-btn-glass px-2.5 py-1 text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer"
+                                        >
+                                          <RefreshCw className="w-3 h-3" />
+                                          Retry
+                                        </button>
+                                        {dispatchedShot.kind === 'video' && (
+                                          <button
+                                            type="button"
+                                            onClick={onOpenEngine}
+                                            className="flow-cta-primary px-2.5 py-1 text-[11px] cursor-pointer"
+                                          >
+                                            Setup GPU
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={onOpenStudio}
+                                      className="flow-btn-glass px-2.5 py-1 text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <span>Studio</span>
+                                      <ArrowRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
                                 </div>
-                              )}
+                              ) : null}
 
                               {/* Dual 1-Click Action Bar: (a) Generate in Studio & (b) Copy for Google Flow */}
                               <div className="flex flex-wrap items-center gap-2 pt-0.5">
@@ -1351,9 +1555,9 @@ export function DirectorV5View({
             <div ref={feedEndRef} />
           </div>
 
-          {/* Sticky Bottom Composer */}
-          <div className="sticky bottom-2 z-20">
-            <div className="flow-composer-shell p-3 space-y-2">
+          {/* Non-Overlapping Footer Composer */}
+          <div data-testid="director-composer-footer" className="shrink-0 pt-2 border-t border-white/10 bg-black/80 backdrop-blur-md">
+            <div className="flow-composer-shell p-2.5 sm:p-3 space-y-2">
               {/* Quick v5.0.3 Triggers */}
               <div className="flex flex-wrap items-center gap-1.5">
                 {[
@@ -1421,7 +1625,7 @@ export function DirectorV5View({
         {/* Right Desktop Sidebar: Asset Inventory Ledger */}
         <aside
           data-testid="director-ledger-sidebar"
-          className="hidden lg:flex lg:w-[336px] xl:w-[360px] shrink-0 flow-card overflow-hidden flex-col sticky top-[92px] max-h-[calc(100vh-112px)]"
+          className="hidden lg:flex lg:w-[336px] xl:w-[360px] shrink-0 flow-card overflow-hidden flex-col h-full"
         >
           {ledgerPanelBody}
         </aside>
