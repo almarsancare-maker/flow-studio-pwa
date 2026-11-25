@@ -229,8 +229,8 @@ export function EngineModal({
                 </span>
               </div>
               <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
-                Runs Wan 2.2 14B, LTX-Video, FLUX.1 &amp; MMAudio in-browser using your free
-                Hugging Face Read token (daily GPU quota).
+                Runs flagship Lightricks LTX-2.5 22B (native video + speech + audio), LTX-2.3
+                First→Last &amp; Wan 2.2 14B using your free Hugging Face Read token.
               </p>
             </button>
 
@@ -253,8 +253,8 @@ export function EngineModal({
                 </span>
               </div>
               <p className="text-[12px] text-white/60 mt-2 leading-[18px]">
-                Dedicated free NVIDIA T4 16 GB GPU: 4-bit LTX-Video 0.9.7, Wan 2.1 &amp; AudioLDM2
-                with zero ZeroGPU quota blocks.
+                Dedicated free NVIDIA T4 16 GB GPU: 4-bit Wan 2.2 TI2V-5B (Apache 2.0), LTX-Video
+                0.9.7 &amp; AudioLDM2 with zero ZeroGPU quota blocks.
               </p>
             </button>
           </div>
@@ -302,7 +302,7 @@ export function EngineModal({
                   className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
                   <option value="hf-ltx-space" className="bg-[#131314]">
-                    Wan 2.2 14B + LTX-Video (HF Token)
+                    LTX-2.5 22B (Native Audio) + Wan 2.2 14B
                   </option>
                   <option value="ken-burns-local" className="bg-[#131314]">
                     Still Pan/Zoom Only (No AI Video)
@@ -511,8 +511,11 @@ export function EngineModal({
                   }
                   className="flow-input w-full px-3 py-2 text-[13px] cursor-pointer"
                 >
+                  <option value="wan2.2-5b" className="bg-[#131314]">
+                    Wan 2.2 TI2V-5B (Best Free T4 · Apache 2.0 T2V/I2V)
+                  </option>
                   <option value="ltx-0.9.7-distilled" className="bg-[#131314]">
-                    LTX-Video 0.9.7 Distilled (OmniLocal 1.2 Fast 8-Step · T2V/I2V/FLF)
+                    LTX-Video 0.9.7 Distilled (Fast 8-Step · T2V/I2V/FLF)
                   </option>
                   <option value="wan2.1-1.3b" className="bg-[#131314]">
                     Wan2.1-1.3B (High-Motion Open T2V)

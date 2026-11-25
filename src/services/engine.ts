@@ -36,6 +36,9 @@ export interface GenerationResult {
 const HF_FLUX_HOST = 'https://black-forest-labs-flux-1-schnell.hf.space';
 const HF_FLUX_DEV_HOST = 'https://black-forest-labs-flux-1-dev.hf.space';
 const HF_SD35_HOST = 'https://stabilityai-stable-diffusion-3-5-large-turbo.hf.space';
+const HF_LTX25_HOST = 'https://lightricks-ltx-2-5.hf.space';
+const HF_LTX23_HOST = 'https://lightricks-ltx-2-3.hf.space';
+const HF_LTX23_FLF_HOST = 'https://linoyts-ltx-2-3-first-last-frame.hf.space';
 const HF_LTX_HOST = 'https://lightricks-ltx-video-distilled.hf.space';
 const HF_WAN22_I2V_HOST = 'https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space';
 const HF_WAN22_FLF_HOST = 'https://multimodalart-wan-2-2-first-last-frame.hf.space';
@@ -548,6 +551,219 @@ async function generateFreeImageCascade(
   }
 
   throw new Error(`All $0 image providers failed (${errors.join(' | ')})`);
+}
+
+// ── Flagship Open-Weight Native Video+Audio Cascade (LTX-2.5 22B -> LTX-2.3 22B -> Wan 2.2 14B -> LTX-Video) ──
+function resolveLtx2Dims(aspectRatio: MediaShot['aspectRatio']): { width: number; height: number } {
+  // Multiples of 64 required by LTX-2.5 / LTX-2.3 two-stage spatial upscaler
+  switch (aspectRatio) {
+    case '9:16':
+      return { width: 576, height: 1024 };
+    case '1:1':
+      return { width: 768, height: 768 };
+    case '21:9':
+      return { width: 1280, height: 576 };
+    default:
+      return { width: 1024, height: 576 };
+  }
+}
+
+async function generateVideoViaLtx25(
+  shot: MediaShot,
+  startFrameDataUrl: string | undefined,
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
+): Promise<GenerationResult> {
+  const isI2V = Boolean(startFrameDataUrl && startFrameDataUrl.startsWith('data:image/'));
+  let uploadedImage = null;
+  if (isI2V && startFrameDataUrl) {
+    onProgress(16, 'Uploading Start Frame to Lightricks LTX-2.5 22B (Native Audio + Video)...');
+    uploadedImage = await uploadDataUrlToGradio(HF_LTX25_HOST, startFrameDataUrl, 'start', hfToken);
+  }
+
+  const { width, height } = resolveLtx2Dims(shot.aspectRatio);
+  const dur = Math.max(1.0, Math.min(5.0, Math.round((shot.durationSec || 3) * 2) / 2));
+  const safeSeed = Math.abs(Math.trunc(shot.seed || 42)) % 2_147_483_647;
+
+  onProgress(28, `Diffusing Lightricks LTX-2.5 22B (${width}×${height} · Native Video + Speech + Audio)...`);
+  const submit = await fetchWithTimeout(
+    `${HF_LTX25_HOST}/gradio_api/call/run`,
+    {
+      method: 'POST',
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        data: [
+          shot.compiledPrompt,
+          uploadedImage,
+          height,
+          width,
+          dur,
+          safeSeed,
+          'conv',
+          false,
+          false,
+          true,
+        ],
+      }),
+    },
+    25_000
+  );
+  if (!submit.ok) throw new Error(`LTX-2.5 submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('LTX-2.5 missing event_id');
+
+  let tick = 36;
+  const parsed = await readGradioSseComplete(
+    `${HF_LTX25_HOST}/gradio_api/call/run/${eventId}`,
+    150_000,
+    () => {
+      tick = Math.min(89, tick + 5);
+      onProgress(tick, 'Rendering LTX-2.5 22B cinema frames + native synchronized audio...');
+    },
+    hfToken
+  );
+
+  const videoUrl = extractGradioVideoUrl(parsed, HF_LTX25_HOST);
+  if (!videoUrl) throw new Error('LTX-2.5 completed without video URL');
+
+  onProgress(95, 'Caching LTX-2.5 Video + Native Audio MP4 into IndexedDB Vault...');
+  const vidResp = await fetchWithTimeout(videoUrl, { headers: hfAuthHeaders(hfToken) }, 35_000);
+  if (!vidResp.ok) throw new Error(`LTX-2.5 MP4 download HTTP ${vidResp.status}`);
+  const blob = await vidResp.blob();
+  if (blob.size < 2048) throw new Error('LTX-2.5 returned empty video');
+
+  return {
+    blob,
+    mimeType: blob.type || 'video/mp4',
+    providerLabel: `Lightricks LTX-2.5 22B (${isI2V ? 'I2V' : 'T2V'} · Native Audio)`,
+    seed: safeSeed,
+    thumbnailDataUrl: startFrameDataUrl,
+    hasSyncedAudio: true,
+  };
+}
+
+async function generateVideoViaLtx23(
+  shot: MediaShot,
+  startFrameDataUrl: string | undefined,
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
+): Promise<GenerationResult> {
+  const isI2V = Boolean(startFrameDataUrl && startFrameDataUrl.startsWith('data:image/'));
+  let uploadedImage = null;
+  if (isI2V && startFrameDataUrl) {
+    onProgress(22, 'Uploading Start Frame to Lightricks LTX-2.3 22B (Native Audio)...');
+    uploadedImage = await uploadDataUrlToGradio(HF_LTX23_HOST, startFrameDataUrl, 'start', hfToken);
+  }
+
+  const { width, height } = resolveLtx2Dims(shot.aspectRatio);
+  const dur = Math.max(1.0, Math.min(6.0, Number(shot.durationSec || 3)));
+  const safeSeed = Math.abs(Math.trunc(shot.seed || 42)) % 2_147_483_647;
+
+  onProgress(36, `Diffusing Lightricks LTX-2.3 22B (${width}×${height} · Native Audio)...`);
+  const submit = await fetchWithTimeout(
+    `${HF_LTX23_HOST}/gradio_api/call/generate_video`,
+    {
+      method: 'POST',
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        data: [uploadedImage, shot.compiledPrompt, dur, true, safeSeed, false, height, width],
+      }),
+    },
+    25_000
+  );
+  if (!submit.ok) throw new Error(`LTX-2.3 submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('LTX-2.3 missing event_id');
+
+  let tick = 44;
+  const parsed = await readGradioSseComplete(
+    `${HF_LTX23_HOST}/gradio_api/call/generate_video/${eventId}`,
+    140_000,
+    () => {
+      tick = Math.min(90, tick + 5);
+      onProgress(tick, 'Diffusing LTX-2.3 22B frames + native audio...');
+    },
+    hfToken
+  );
+
+  const videoUrl = extractGradioVideoUrl(parsed, HF_LTX23_HOST);
+  if (!videoUrl) throw new Error('LTX-2.3 completed without video URL');
+
+  onProgress(95, 'Caching LTX-2.3 MP4 into IndexedDB Vault...');
+  const vidResp = await fetchWithTimeout(videoUrl, { headers: hfAuthHeaders(hfToken) }, 35_000);
+  if (!vidResp.ok) throw new Error(`LTX-2.3 MP4 download HTTP ${vidResp.status}`);
+  const blob = await vidResp.blob();
+  if (blob.size < 2048) throw new Error('LTX-2.3 returned empty video');
+
+  return {
+    blob,
+    mimeType: blob.type || 'video/mp4',
+    providerLabel: `Lightricks LTX-2.3 22B (${isI2V ? 'I2V' : 'T2V'} · Native Audio)`,
+    seed: safeSeed,
+    thumbnailDataUrl: startFrameDataUrl,
+    hasSyncedAudio: true,
+  };
+}
+
+async function generateVideoViaLtx23FirstLastFrame(
+  shot: MediaShot,
+  startFrame: string,
+  endFrame: string,
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
+): Promise<GenerationResult> {
+  onProgress(18, 'Uploading Start & End frames to LTX-2.3 22B First→Last Frame (Native Audio)...');
+  const [startFile, endFile] = await Promise.all([
+    uploadDataUrlToGradio(HF_LTX23_FLF_HOST, startFrame, 'start', hfToken),
+    uploadDataUrlToGradio(HF_LTX23_FLF_HOST, endFrame, 'end', hfToken),
+  ]);
+
+  const { width, height } = resolveLtx2Dims(shot.aspectRatio);
+  const dur = Math.max(1.0, Math.min(6.0, Number(shot.durationSec || 3)));
+  const safeSeed = Math.abs(Math.trunc(shot.seed || 42)) % 2_147_483_647;
+
+  onProgress(34, 'Morphing Start → End Frame on LTX-2.3 22B (Native Audio)...');
+  const submit = await fetchWithTimeout(
+    `${HF_LTX23_FLF_HOST}/gradio_api/call/generate_video`,
+    {
+      method: 'POST',
+      headers: hfAuthHeaders(hfToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        data: [startFile, endFile, null, shot.compiledPrompt, dur, true, safeSeed, false, height, width],
+      }),
+    },
+    25_000
+  );
+  if (!submit.ok) throw new Error(`LTX-2.3 FLF submit HTTP ${submit.status}`);
+  const { event_id: eventId } = (await submit.json()) as { event_id?: string };
+  if (!eventId) throw new Error('LTX-2.3 FLF missing event_id');
+
+  let tick = 42;
+  const parsed = await readGradioSseComplete(
+    `${HF_LTX23_FLF_HOST}/gradio_api/call/generate_video/${eventId}`,
+    140_000,
+    () => {
+      tick = Math.min(90, tick + 5);
+      onProgress(tick, 'Diffusing LTX-2.3 First→Last Frame + native audio...');
+    },
+    hfToken
+  );
+
+  const videoUrl = extractGradioVideoUrl(parsed, HF_LTX23_FLF_HOST);
+  if (!videoUrl) throw new Error('LTX-2.3 FLF completed without video URL');
+
+  onProgress(95, 'Caching LTX-2.3 First→Last MP4 into IndexedDB Vault...');
+  const vidResp = await fetchWithTimeout(videoUrl, { headers: hfAuthHeaders(hfToken) }, 35_000);
+  if (!vidResp.ok) throw new Error(`LTX-2.3 FLF MP4 HTTP ${vidResp.status}`);
+  const blob = await vidResp.blob();
+  return {
+    blob,
+    mimeType: blob.type || 'video/mp4',
+    providerLabel: 'LTX-2.3 22B First→Last (Native Audio)',
+    seed: safeSeed,
+    thumbnailDataUrl: startFrame,
+    hasSyncedAudio: true,
+  };
 }
 
 // ── Multi-Space $0 AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video) ──
@@ -1228,7 +1444,7 @@ export async function runVideoGeneration(
     }
   };
 
-  // Engine 1: Real Open-Weight AI Video Cascade (Wan 2.2 14B FLF -> Wan 2.2 14B FP8 -> LTX-Video)
+  // Engine 1: Best Free Open-Weight Video+Audio Cascade (LTX-2.5 22B Native Audio -> LTX-2.3 22B -> Wan 2.2 14B -> LTX-Video)
   let keyframeDataUrl = shot.startFrameDataUrl;
   let actualSeed = shot.seed;
   const videoErrors: string[] = [];
@@ -1241,7 +1457,19 @@ export async function runVideoGeneration(
       );
     }
 
+    // 1. First→Last Frame Interpolation (LTX-2.3 22B Native Audio -> Wan 2.2 14B FLF)
     if (keyframeDataUrl && shot.endFrameDataUrl) {
+      try {
+        return await generateVideoViaLtx23FirstLastFrame(
+          shot,
+          keyframeDataUrl,
+          shot.endFrameDataUrl,
+          onProgress,
+          hfToken
+        );
+      } catch (e) {
+        videoErrors.push(`LTX-2.3 FLF: ${e instanceof Error ? e.message : 'failed'}`);
+      }
       try {
         const res = await generateVideoViaWan22FirstLastFrame(
           shot,
@@ -1256,10 +1484,24 @@ export async function runVideoGeneration(
       }
     }
 
+    // 2. #1 Free Open-Weight Model: Lightricks LTX-2.5 22B (Native Video + Dialogue + Foley in ONE pass)
+    try {
+      return await generateVideoViaLtx25(shot, keyframeDataUrl, onProgress, hfToken);
+    } catch (e) {
+      videoErrors.push(`LTX-2.5: ${e instanceof Error ? e.message : 'failed'}`);
+    }
+
+    // 3. #2 Backup: Lightricks LTX-2.3 22B (Native Synchronized Video + Audio)
+    try {
+      return await generateVideoViaLtx23(shot, keyframeDataUrl, onProgress, hfToken);
+    } catch (e) {
+      videoErrors.push(`LTX-2.3: ${e instanceof Error ? e.message : 'failed'}`);
+    }
+
+    // 4. #3 Fallback: Wan 2.2 14B FP8 Lightning (with off-ZeroGPU Stage-1 keyframe for T2V)
     if (!keyframeDataUrl) {
       try {
-        // Reserve 100% of user's ZeroGPU quota for video diffusion by generating Stage-1 still off-ZeroGPU
-        onProgress(14, 'Stage 1/2: Generating keyframe still for Wan 2.2 14B...');
+        onProgress(14, 'Fallback Stage 1/2: Generating keyframe still for Wan 2.2 14B...');
         const still = await generateFreeImageCascade(
           shot.compiledPrompt,
           shot.width >= shot.height ? 1024 : 576,
@@ -1287,6 +1529,7 @@ export async function runVideoGeneration(
       }
     }
 
+    // 5. #4 Fallback: Legacy LTX-Video Distilled
     try {
       const res = await generateVideoViaDirectHfLtx(shot, onProgress, hfToken);
       return await attachFreeSyncedAudioIfEnabled(res);

@@ -79,7 +79,7 @@ export interface EngineSettings {
   hfToken: string;
   colabUrl: string;
   colabModelImage: 'sdxl-turbo' | 'sdxl-base';
-  colabModelVideo: 'ltx-0.9.7-distilled' | 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
+  colabModelVideo: 'wan2.2-5b' | 'ltx-0.9.7-distilled' | 'cogvideox-2b' | 'ltx-video' | 'wan2.1-1.3b';
   colabAudio: boolean;
   freeImageModel: FreeImageModel;
   freeVideoFallback: 'hf-ltx-space' | 'ken-burns-local';
@@ -123,7 +123,7 @@ export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   hfToken: '',
   colabUrl: '',
   colabModelImage: 'sdxl-turbo',
-  colabModelVideo: 'ltx-0.9.7-distilled',
+  colabModelVideo: 'wan2.2-5b',
   colabAudio: true,
   freeImageModel: 'flux',
   freeVideoFallback: 'hf-ltx-space',

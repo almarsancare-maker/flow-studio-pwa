@@ -264,7 +264,7 @@ export default async function handler(req, res) {
               steps: body.steps || 25,
               cfg_scale: body.cfgScale || 6.0,
               seed: body.seed ?? -1,
-              model: body.model || 'ltx-0.9.7-distilled',
+              model: body.model || 'wan2.2-5b',
               mode: body.mode || 't2v',
               start_frame_data_url: body.startFrameDataUrl || null,
               end_frame_data_url: body.endFrameDataUrl || null,
