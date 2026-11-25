@@ -37,6 +37,12 @@ export default function handler(req, res) {
       replicate: Boolean(process.env.REPLICATE_API_TOKEN && process.env.REPLICATE_API_TOKEN.trim()),
       fal: Boolean(process.env.FAL_KEY && process.env.FAL_KEY.trim()),
     },
+    directorV5: {
+      version: '5.0.3',
+      checks: 78,
+      geminiReady: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()),
+      zeroKeyFallback: true,
+    },
     timestamp: new Date().toISOString(),
   });
 }

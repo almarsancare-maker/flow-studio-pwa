@@ -13,6 +13,7 @@ function localVercelApiPlugin(): Plugin {
     '/api/proxy': 'api/proxy.js',
     '/api/seedance': 'api/seedance.js',
     '/api/director': 'api/director.js',
+    '/api/director-v5': 'api/director-v5.js',
     '/api/omni': 'api/omni.js',
   };
 

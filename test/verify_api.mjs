@@ -12,6 +12,15 @@ import omniHandler, {
   validateGeminiFileUri,
   validateGeminiInteractionId,
 } from '../api/omni.js';
+import directorV5Handler from '../api/director-v5.js';
+import {
+  MASTER_PROMPT_V503,
+  MASTER_PROMPT_V503_BYTES,
+  MASTER_PROMPT_V503_CHECKS,
+  MASTER_PROMPT_V503_VERSION,
+  STEP_0_CANONICAL_MENU,
+} from '../api/_directorV5Prompt.js';
+import { parseDirectorV5Output } from '../api/_directorV5Parser.js';
 import { validateColabBaseUrl, validateColabPath } from '../api/_ssrf.js';
 
 function createMockRes() {
@@ -169,6 +178,155 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   await omniHandler({ method: 'POST', headers: {}, body: { action: 'verify', apiKey: '' } }, resNoKey);
   assert.equal(resNoKey.result.statusCode, 400);
   console.log('[PASS] Test 6: /api/omni interaction ID, File URI SSRF allowlist & key redaction verified');
+}
+
+// Test 7: Verbatim MASTER PROMPT v5.0.3 integrity (zero rules dropped)
+{
+  assert.equal(MASTER_PROMPT_V503_VERSION, '5.0.3');
+  assert.equal(MASTER_PROMPT_V503_CHECKS, 78);
+  assert.equal(Buffer.byteLength(MASTER_PROMPT_V503, 'utf8'), 129990);
+  assert.equal(MASTER_PROMPT_V503_BYTES, 129990);
+  for (const anchor of [
+    'MASTER PROMPT v5.0.3',
+    'ASSET INVENTORY SWEEP',
+    'EXACT FILE ATTACHMENT LAW',
+    'NEVER-REGENERATE LAW',
+    'CHECKS: 78/78 PASS',
+    'BLUEPRINT — NOT A FRAME',
+    'FRAME QUARTET',
+    '[STEP 0 — ENTRY QUESTION]',
+    '[STEP 16 OF 16 — O-16 FINAL GATE: BUILD]',
+  ]) {
+    assert.ok(MASTER_PROMPT_V503.includes(anchor), `Missing v5.0.3 anchor: ${anchor}`);
+  }
+  const parsedStep0 = parseDirectorV5Output(STEP_0_CANONICAL_MENU);
+  assert.equal(parsedStep0.options.length, 9, `Expected 9 canonical STEP 0 options, got ${parsedStep0.options.length}`);
+  assert.equal(parsedStep0.stage, 'step0');
+  console.log('[PASS] Test 7: Verbatim MASTER PROMPT v5.0.3 (129,990 bytes, 78/78 checks, 9 STEP 0 choices) verified');
+}
+
+// Test 8: /api/director-v5 GET metadata + init + Express Walk -> BUILD -> Queue A -> Shot S1 + REF BOUND skip
+{
+  const resGet = createMockRes();
+  await directorV5Handler({ method: 'GET', headers: {} }, resGet);
+  assert.equal(resGet.result.statusCode, 200);
+  assert.equal(resGet.result.body.version, '5.0.3');
+  assert.equal(resGet.result.body.checks, 78);
+
+  // Step 0 Init
+  const resInit = createMockRes();
+  await directorV5Handler({ method: 'POST', headers: {}, body: { action: 'init' } }, resInit);
+  assert.equal(resInit.result.statusCode, 200);
+  assert.equal(resInit.result.body.ok, true);
+  assert.equal(resInit.result.body.options.length, 9);
+
+  // Choose 4 (Express Walk)
+  const resExpress = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '4',
+        sessionState: resInit.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    resExpress
+  );
+  assert.equal(resExpress.result.statusCode, 200);
+  assert.ok(resExpress.result.body.options.length >= 3);
+
+  // Launch Express Walk with Option 1 -> stops at O-16 BUILD Gate
+  const resGate = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '1',
+        sessionState: resExpress.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    resGate
+  );
+  assert.equal(resGate.result.statusCode, 200);
+  assert.equal(resGate.result.body.stage, 'build_gate');
+  assert.ok(resGate.result.body.text.includes('QUEUE A REQUIRED'), 'Express walk must mark unrendered sheets QUEUE A REQUIRED');
+
+  // Click 1 (BUILD) -> emits 12-Item Kit (78/78 PASS) + Queue A Character 2x4 Sheet with ATTACH line
+  const resBuild = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '1',
+        sessionState: resGate.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    resBuild
+  );
+  assert.equal(resBuild.result.statusCode, 200);
+  assert.equal(resBuild.result.body.checksStamp, '78/78 PASS');
+  assert.ok(resBuild.result.body.promptBlocks.length >= 1, 'Expected Queue A prompt block on BUILD');
+  assert.ok(
+    resBuild.result.body.promptBlocks[0].attachLine.startsWith('ATTACH:'),
+    'Expected ATTACH: line on Queue A prompt block'
+  );
+
+  // Jump to Shot S1 -> verify Quartet + Queue B Video + Motion + 12-Cell Acceptance Card
+  const resShot = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '2',
+        sessionState: resBuild.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    resShot
+  );
+  assert.equal(resShot.result.statusCode, 200);
+  assert.equal(resShot.result.body.stage, 'shots');
+  assert.ok(resShot.result.body.promptBlocks.some((b) => b.category === 'quartet'), 'Missing Frame Quartet block');
+  assert.ok(resShot.result.body.promptBlocks.some((b) => b.category === 'queue_b_video'), 'Missing Queue B video block');
+  assert.ok(resShot.result.body.acceptanceCard && resShot.result.body.acceptanceCard.cells.length === 12, 'Expected 12-cell Acceptance Card');
+
+  // Verify Never-Regenerate Law: if all Queue A cards are REF BOUND, BUILD skips directly to Shot S1
+  const preBoundLedger = [
+    { filename: 'mira_w1_sheet.jpg', token: '@MIRA_W1', role: 'face lock', status: 'REF BOUND' },
+    { filename: 'set_rain_dorm_sheet.jpg', token: '@SET-RAINDORM', role: 'spatial lock', status: 'REF BOUND' },
+    { filename: 'set_rain_dorm_angles.jpg', token: '@SET-RAINDORM', role: 'spatial angles', status: 'REF BOUND' },
+    { filename: 'blueprint_rain_dorm.jpg', token: '@SET-RAINDORM', role: 'blueprint', status: 'REF BOUND' },
+    { filename: 'prop_sketchbook_sheet.jpg', token: '@PROP-SKETCHBOOK', role: 'prop lock', status: 'REF BOUND' },
+  ];
+  const resBoundBuild = createMockRes();
+  await directorV5Handler(
+    {
+      method: 'POST',
+      headers: {},
+      body: {
+        action: 'turn',
+        userInput: '1',
+        ledger: preBoundLedger,
+        sessionState: resGate.result.body.sessionState,
+        skipPollinations: true,
+      },
+    },
+    resBoundBuild
+  );
+  assert.equal(resBoundBuild.result.statusCode, 200);
+  assert.equal(resBoundBuild.result.body.sessionState.stage, 'shots', 'Should skip Queue A when all assets REF BOUND');
+  console.log('[PASS] Test 8: /api/director-v5 STEP 0 -> Express Walk -> BUILD -> Queue A -> Shot S1 + REF BOUND skip verified');
 }
 
 console.log('ALL_PHASE2_API_TESTS_PASSED');
