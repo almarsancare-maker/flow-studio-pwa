@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import type { MediaShot } from '../types/studio';
-import { grabVideoFrame } from '../utils/frameGrabber';
+import { blobToDataUrl, grabVideoFrame } from '../utils/frameGrabber';
 import { upscaleImageTo4K } from '../utils/upscaler';
 
 interface LightboxModalProps {
@@ -61,6 +61,29 @@ export function LightboxModal({
   }, [shot, onClose]);
 
   if (!shot || !mediaUrl) return null;
+
+  const resolveImageDataUrl = async (): Promise<string | null> => {
+    if (shot.thumbnailDataUrl?.startsWith('data:image/')) return shot.thumbnailDataUrl;
+    if (mediaUrl.startsWith('data:image/')) return mediaUrl;
+    try {
+      const resp = await fetch(mediaUrl);
+      const blob = await resp.blob();
+      return await blobToDataUrl(blob);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleInjectStill = async (target: 'start' | 'end') => {
+    const dataUrl = await resolveImageDataUrl();
+    if (!dataUrl) {
+      setNotice('Could not encode still frame for I2V.');
+      return;
+    }
+    if (target === 'start') onInjectStartFrame(dataUrl, shot.label);
+    else onInjectEndFrame(dataUrl, shot.label);
+    onClose();
+  };
 
   const handleGrab = async (position: 'current' | 'last') => {
     const vid = videoRef.current;
@@ -207,10 +230,7 @@ export function LightboxModal({
                 <>
                   <button
                     type="button"
-                    onClick={() => {
-                      onInjectStartFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
-                      onClose();
-                    }}
+                    onClick={() => void handleInjectStill('start')}
                     className="flow-cta-primary flex items-center gap-1.5 px-4 py-2 text-[12px] cursor-pointer"
                   >
                     <Clapperboard className="w-3.5 h-3.5 stroke-[1.7]" />
@@ -218,10 +238,7 @@ export function LightboxModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      onInjectEndFrame(shot.thumbnailDataUrl || mediaUrl, shot.label);
-                      onClose();
-                    }}
+                    onClick={() => void handleInjectStill('end')}
                     className="flow-btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium cursor-pointer"
                   >
                     Use as End Frame

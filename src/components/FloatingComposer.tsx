@@ -555,26 +555,37 @@ export function FloatingComposer({
             </div>
           )}
 
-          {/* Honest Pre-Flight Notice when Video GPU is not yet connected */}
+          {/* Pre-Flight Video Engine Status Hint */}
           {needsVideoSetup && (
             <div
               data-testid="video-gpu-notice"
-              className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-[14px] bg-[#f59e0b]/10 border border-[#f59e0b]/35 text-[12px] text-white/90"
+              className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-[14px] bg-white/[0.04] border border-white/15 text-[12px] text-white/85"
             >
               <span className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#f59e0b] shrink-0" />
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    engineSettings.activeEngine === 'colab-t4' ? 'bg-[#f59e0b]' : 'bg-[#29c58f]'
+                  }`}
+                />
                 <span>
-                  Real AI video needs a <strong className="font-medium text-white">Free HF Token ($0)</strong>,{' '}
-                  <strong className="font-medium text-white">Free Colab T4</strong>, or cloud API key.
+                  {engineSettings.activeEngine === 'colab-t4' ? (
+                    <>
+                      Paste your <strong className="font-medium text-white">Colab T4 tunnel link</strong> to render on your 16 GB GPU.
+                    </>
+                  ) : (
+                    <>
+                      <strong className="font-medium text-white">Free Cloud LTX-Video ($0)</strong> ready now — optionally add a free HF token for <strong className="font-medium text-white">LTX-2.5 22B + Audio</strong>.
+                    </>
+                  )}
                 </span>
               </span>
               <button
                 type="button"
                 data-testid="composer-setup-gpu-btn"
                 onClick={onOpenEngine}
-                className="flow-cta-primary px-3 py-1 text-[11px] cursor-pointer shrink-0"
+                className="flow-btn-glass px-3 py-1 text-[11px] font-medium cursor-pointer shrink-0"
               >
-                Connect Video GPU
+                {engineSettings.activeEngine === 'colab-t4' ? 'Connect Colab' : 'Upgrade GPU'}
               </button>
             </div>
           )}

@@ -7,12 +7,20 @@ import {
 } from './_rateLimit.js';
 
 const LTX_SPACE_HOST = 'https://lightricks-ltx-video-distilled.hf.space';
+const ALLOWED_HF_MEDIA_RE =
+  /^https:\/\/[a-z0-9-]+\.hf\.space\/gradio_api\/file=[a-zA-Z0-9._/@%-]+$/;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
-async function uploadImageToGradio(host, dataUrl) {
+function hfHeaders(hfToken, extra = {}) {
+  const clean = String(hfToken || '').trim();
+  return clean ? { ...extra, Authorization: `Bearer ${clean}` } : extra;
+}
+
+async function uploadImageToGradio(host, dataUrl, hfToken) {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
   if (!match) throw new Error('Invalid start frame image Data URL.');
   const mime = match[1];
-  const ext = mime.includes('png') ? 'png' : 'jpg';
+  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
   const buf = Buffer.from(match[2], 'base64');
 
   const form = new FormData();
@@ -20,6 +28,7 @@ async function uploadImageToGradio(host, dataUrl) {
 
   const resp = await fetch(`${host}/gradio_api/upload`, {
     method: 'POST',
+    headers: hfHeaders(hfToken),
     body: form,
   });
   if (!resp.ok) {
@@ -31,11 +40,16 @@ async function uploadImageToGradio(host, dataUrl) {
   }
   return {
     path: uploaded[0],
+    url: `${host}/gradio_api/file=${uploaded[0]}`,
+    orig_name: `start_frame.${ext}`,
+    mime_type: mime,
+    is_stream: false,
     meta: { _type: 'gradio.FileData' },
   };
 }
 
 async function submitHfLtxVideo(body) {
+  const hfToken = String(body.hfToken || '').trim() || undefined;
   const prompt = String(body.prompt || '').trim();
   const negativePrompt =
     String(body.negativePrompt || '').trim() ||
@@ -44,11 +58,14 @@ async function submitHfLtxVideo(body) {
   const height = Math.max(384, Math.min(768, Math.round((Number(body.height) || 512) / 32) * 32));
   const durationSec = Math.max(2, Math.min(5, Math.round(Number(body.durationSec) || 3)));
   const seed = Number.isInteger(Number(body.seed)) && Number(body.seed) >= 0 ? Number(body.seed) : 42;
-  const isI2V = body.mode === 'i2v' && typeof body.startFrameDataUrl === 'string' && body.startFrameDataUrl.startsWith('data:image/');
+  const isI2V =
+    body.mode === 'i2v' &&
+    typeof body.startFrameDataUrl === 'string' &&
+    body.startFrameDataUrl.startsWith('data:image/');
 
   let uploadedImage = null;
   if (isI2V) {
-    uploadedImage = await uploadImageToGradio(LTX_SPACE_HOST, body.startFrameDataUrl);
+    uploadedImage = await uploadImageToGradio(LTX_SPACE_HOST, body.startFrameDataUrl, hfToken);
   }
 
   const endpoint = isI2V ? 'image_to_video' : 'text_to_video';
@@ -70,7 +87,7 @@ async function submitHfLtxVideo(body) {
 
   const submitResp = await fetch(`${LTX_SPACE_HOST}/gradio_api/call/${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: hfHeaders(hfToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ data: payloadData }),
   });
 
@@ -207,6 +224,24 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
+      const action = String(req.query?.action || '');
+      if (action === 'download') {
+        const rawUrl = String(req.query?.videoUrl || '').trim();
+        if (!ALLOWED_HF_MEDIA_RE.test(rawUrl) || rawUrl.includes('..')) {
+          return res.status(400).json({ ok: false, error: 'Disallowed HF Space video URL.' });
+        }
+        const upstream = await fetchWithAbort(rawUrl, {}, 40_000);
+        if (!upstream.ok) {
+          return res.status(502).json({ ok: false, error: `Video download HTTP ${upstream.status}` });
+        }
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        if (buf.length > MAX_VIDEO_BYTES) {
+          return res.status(413).json({ ok: false, error: 'Video exceeds 50 MB relay limit.' });
+        }
+        res.setHeader('Content-Type', upstream.headers.get('content-type') || 'video/mp4');
+        return res.status(200).send(buf);
+      }
+
       const provider = String(req.query?.provider || '');
       const taskId = String(req.query?.taskId || '');
       if (!taskId) {

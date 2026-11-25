@@ -183,12 +183,15 @@ export async function stitchStoryboardSequence(
     'video/webm',
     'video/mp4',
   ];
-  const mimeType = preferredMimes.find((m) => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+  const mimeType =
+    typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function'
+      ? preferredMimes.find((m) => MediaRecorder.isTypeSupported(m)) || ''
+      : '';
 
-  const recorder = new MediaRecorder(recordStream, {
-    mimeType,
-    videoBitsPerSecond: 6_500_000,
-  });
+  const recorder = new MediaRecorder(
+    recordStream,
+    mimeType ? { mimeType, videoBitsPerSecond: 6_500_000 } : { videoBitsPerSecond: 6_500_000 }
+  );
 
   const chunks: BlobPart[] = [];
   recorder.ondataavailable = (ev) => {

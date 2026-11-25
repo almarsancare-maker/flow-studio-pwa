@@ -468,16 +468,18 @@ async function generateImageViaServerApi(
   width: number,
   height: number,
   seed: number,
-  model: 'flux' | 'turbo'
+  model: FreeImageModel,
+  negativePrompt = '',
+  hfToken?: string
 ): Promise<{ dataUrl: string; blob: Blob; mimeType: string; provider: string; seed: number }> {
   const resp = await fetchWithTimeout(
     '/api/image',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, width, height, seed, model }),
+      body: JSON.stringify({ prompt, negativePrompt, width, height, seed, model, hfToken }),
     },
-    40_000
+    48_000
   );
   const data = await resp.json();
   if (!resp.ok || !data?.ok || !data?.dataUrl) {
@@ -507,7 +509,7 @@ async function generateFreeImageCascade(
   const errors: string[] = [];
   const hasHf = Boolean(hfToken && hfToken.trim().length > 0);
 
-  // Only hit HF ZeroGPU image Spaces when the user has a Free HF token (anonymous ZeroGPU rejects immediately)
+  // Authenticated HF user: hit selected HF ZeroGPU image Space directly first
   if (hasHf) {
     if (model === 'flux-dev') {
       try {
@@ -535,17 +537,25 @@ async function generateFreeImageCascade(
     }
   }
 
-  // Primary $0 still path via same-origin Vercel /api/image (server-side Pollinations -> HF FLUX cascade, zero browser 402 console noise)
+  // Primary $0 still path via same-origin Vercel /api/image (multi-pool FLUX.1-schnell -> SD 3.5 Turbo -> Pollinations -> AI Horde)
   try {
-    onProgress(40, 'Rendering HD keyframe via $0 Cloud Image Relay...');
-    return await generateImageViaServerApi(prompt, width, height, seed, 'turbo');
+    onProgress(40, 'Rendering HD keyframe via $0 Multi-GPU Image Cascade...');
+    return await generateImageViaServerApi(
+      prompt,
+      width,
+      height,
+      seed,
+      model,
+      negativePrompt,
+      hfToken
+    );
   } catch (e) {
     errors.push(e instanceof Error ? e.message : 'Server API failed');
   }
 
   // Browser-direct fallback if same-origin relay is temporarily busy
   try {
-    onProgress(75, 'Trying direct Pollinations Turbo fallback ($0)...');
+    onProgress(78, 'Trying direct Pollinations Turbo fallback ($0)...');
     return await generateImageViaDirectPollinations(prompt, width, height, seed, 'turbo');
   } catch (e) {
     errors.push(e instanceof Error ? e.message : 'Pollinations turbo failed');
@@ -972,6 +982,90 @@ async function generateVideoViaDirectHfLtx(
     blob,
     mimeType: blob.type || 'video/mp4',
     providerLabel: `HF LTX-Video ($0 ZeroGPU ${isI2V ? 'I2V' : 'T2V'})`,
+    seed: shot.seed,
+    thumbnailDataUrl: shot.startFrameDataUrl,
+  };
+}
+
+async function generateVideoViaServerRelay(
+  shot: MediaShot,
+  onProgress: (pct: number, phase: string) => void,
+  hfToken?: string
+): Promise<GenerationResult> {
+  const isI2V =
+    shot.mode === 'i2v' &&
+    typeof shot.startFrameDataUrl === 'string' &&
+    shot.startFrameDataUrl.startsWith('data:image/');
+
+  onProgress(18, `Submitting ${isI2V ? 'I2V' : 'T2V'} to Free $0 Cloud LTX-Video GPU...`);
+  const submitResp = await fetchWithTimeout(
+    '/api/video',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        engine: 'free-24-7',
+        prompt: shot.compiledPrompt,
+        negativePrompt: shot.negativePrompt || WAN_DEFAULT_NEG,
+        width: shot.width,
+        height: shot.height,
+        durationSec: Math.min(5, Math.max(2, shot.durationSec || 3)),
+        seed: shot.seed,
+        mode: isI2V ? 'i2v' : 't2v',
+        startFrameDataUrl: isI2V ? shot.startFrameDataUrl : undefined,
+        hfToken,
+      }),
+    },
+    30_000
+  );
+  const submitData = await submitResp.json();
+  if (!submitResp.ok || !submitData?.ok || !submitData?.taskId) {
+    throw new Error(submitData?.error || 'Free LTX-Video submit unavailable');
+  }
+
+  const taskId = String(submitData.taskId);
+  const endpoint = String(submitData.endpoint || (isI2V ? 'image_to_video' : 'text_to_video'));
+  let videoUrl: string | null = null;
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    onProgress(
+      Math.min(86, 30 + attempt * 8),
+      'Diffusing real AI video on Free LTX-Video Cloud GPU...'
+    );
+    const pollResp = await fetchWithTimeout(
+      `/api/video?provider=hf-ltx-video&taskId=${encodeURIComponent(taskId)}&endpoint=${encodeURIComponent(endpoint)}`,
+      {},
+      30_000
+    );
+    const poll = await pollResp.json();
+    if (poll.status === 'failed' || poll.ok === false) {
+      throw new Error(poll.error || 'Free LTX-Video ZeroGPU busy');
+    }
+    if (poll.status === 'completed' && poll.videoUrl) {
+      videoUrl = String(poll.videoUrl);
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+
+  if (!videoUrl) {
+    throw new Error('Free LTX-Video timed out waiting for Cloud GPU');
+  }
+
+  onProgress(92, 'Downloading real AI MP4 into offline IndexedDB Vault...');
+  const dlResp = await fetchWithTimeout(
+    `/api/video?action=download&videoUrl=${encodeURIComponent(videoUrl)}`,
+    {},
+    45_000
+  );
+  if (!dlResp.ok) throw new Error(`MP4 download HTTP ${dlResp.status}`);
+  const blob = await dlResp.blob();
+  if (blob.size < 2048) throw new Error('Empty MP4 received');
+
+  return {
+    blob,
+    mimeType: blob.type || 'video/mp4',
+    providerLabel: `Free Cloud LTX-Video ($0 ${isI2V ? 'I2V' : 'T2V'})`,
     seed: shot.seed,
     thumbnailDataUrl: shot.startFrameDataUrl,
   };
@@ -1451,96 +1545,102 @@ export async function runVideoGeneration(
   const videoErrors: string[] = [];
 
   if (settings.freeVideoFallback === 'hf-ltx-space') {
-    // Fail fast (<50ms) when unauthenticated: anonymous HF ZeroGPU always rejects video calls.
-    if (!hfToken) {
-      throw new Error(
-        'Video GPU not connected. Click "Setup Free GPU" to paste a free HF token (hf_...) or launch Free Colab T4 16 GB.'
-      );
-    }
-
-    // 1. First→Last Frame Interpolation (LTX-2.3 22B Native Audio -> Wan 2.2 14B FLF)
-    if (keyframeDataUrl && shot.endFrameDataUrl) {
-      try {
-        return await generateVideoViaLtx23FirstLastFrame(
-          shot,
-          keyframeDataUrl,
-          shot.endFrameDataUrl,
-          onProgress,
-          hfToken
-        );
-      } catch (e) {
-        videoErrors.push(`LTX-2.3 FLF: ${e instanceof Error ? e.message : 'failed'}`);
+    // Authenticated HF user: unlock flagship LTX-2.5 22B (Native Audio) -> LTX-2.3 22B -> Wan 2.2 14B -> LTX-Video
+    if (hfToken) {
+      // 1. First→Last Frame Interpolation (LTX-2.3 22B Native Audio -> Wan 2.2 14B FLF)
+      if (keyframeDataUrl && shot.endFrameDataUrl) {
+        try {
+          return await generateVideoViaLtx23FirstLastFrame(
+            shot,
+            keyframeDataUrl,
+            shot.endFrameDataUrl,
+            onProgress,
+            hfToken
+          );
+        } catch (e) {
+          videoErrors.push(`LTX-2.3 FLF: ${e instanceof Error ? e.message : 'failed'}`);
+        }
+        try {
+          const res = await generateVideoViaWan22FirstLastFrame(
+            shot,
+            keyframeDataUrl,
+            shot.endFrameDataUrl,
+            onProgress,
+            hfToken
+          );
+          return await attachFreeSyncedAudioIfEnabled(res);
+        } catch (e) {
+          videoErrors.push(`Wan 2.2 FLF: ${e instanceof Error ? e.message : 'failed'}`);
+        }
       }
+
+      // 2. #1 Free Open-Weight Model: Lightricks LTX-2.5 22B (Native Video + Dialogue + Foley in ONE pass)
       try {
-        const res = await generateVideoViaWan22FirstLastFrame(
-          shot,
-          keyframeDataUrl,
-          shot.endFrameDataUrl,
-          onProgress,
-          hfToken
-        );
+        return await generateVideoViaLtx25(shot, keyframeDataUrl, onProgress, hfToken);
+      } catch (e) {
+        videoErrors.push(`LTX-2.5: ${e instanceof Error ? e.message : 'failed'}`);
+      }
+
+      // 3. #2 Backup: Lightricks LTX-2.3 22B (Native Synchronized Video + Audio)
+      try {
+        return await generateVideoViaLtx23(shot, keyframeDataUrl, onProgress, hfToken);
+      } catch (e) {
+        videoErrors.push(`LTX-2.3: ${e instanceof Error ? e.message : 'failed'}`);
+      }
+
+      // 4. #3 Fallback: Wan 2.2 14B FP8 Lightning (with off-ZeroGPU Stage-1 keyframe for T2V)
+      if (!keyframeDataUrl) {
+        try {
+          onProgress(14, 'Fallback Stage 1/2: Generating keyframe still for Wan 2.2 14B...');
+          const still = await generateFreeImageCascade(
+            shot.compiledPrompt,
+            shot.width >= shot.height ? 1024 : 576,
+            shot.width >= shot.height ? 576 : 1024,
+            shot.seed,
+            'turbo',
+            onProgress,
+            shot.negativePrompt,
+            shot.steps,
+            hfToken
+          );
+          keyframeDataUrl = still.dataUrl;
+          actualSeed = still.seed;
+        } catch (e) {
+          videoErrors.push(`Keyframe: ${e instanceof Error ? e.message : 'failed'}`);
+        }
+      }
+
+      if (keyframeDataUrl) {
+        try {
+          const res = await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress, hfToken);
+          return await attachFreeSyncedAudioIfEnabled(res);
+        } catch (e) {
+          videoErrors.push(`Wan 2.2 FP8: ${e instanceof Error ? e.message : 'failed'}`);
+        }
+      }
+
+      // 5. #4 Fallback: Direct HF LTX-Video Distilled
+      try {
+        const res = await generateVideoViaDirectHfLtx(shot, onProgress, hfToken);
         return await attachFreeSyncedAudioIfEnabled(res);
       } catch (e) {
-        videoErrors.push(`Wan 2.2 FLF: ${e instanceof Error ? e.message : 'failed'}`);
+        videoErrors.push(`LTX-Video: ${e instanceof Error ? e.message : 'failed'}`);
       }
     }
 
-    // 2. #1 Free Open-Weight Model: Lightricks LTX-2.5 22B (Native Video + Dialogue + Foley in ONE pass)
+    // Zero-Token Free Cloud Real AI Video via same-origin /api/video relay (LTX-Video Distilled — works out of the box!)
     try {
-      return await generateVideoViaLtx25(shot, keyframeDataUrl, onProgress, hfToken);
-    } catch (e) {
-      videoErrors.push(`LTX-2.5: ${e instanceof Error ? e.message : 'failed'}`);
-    }
-
-    // 3. #2 Backup: Lightricks LTX-2.3 22B (Native Synchronized Video + Audio)
-    try {
-      return await generateVideoViaLtx23(shot, keyframeDataUrl, onProgress, hfToken);
-    } catch (e) {
-      videoErrors.push(`LTX-2.3: ${e instanceof Error ? e.message : 'failed'}`);
-    }
-
-    // 4. #3 Fallback: Wan 2.2 14B FP8 Lightning (with off-ZeroGPU Stage-1 keyframe for T2V)
-    if (!keyframeDataUrl) {
-      try {
-        onProgress(14, 'Fallback Stage 1/2: Generating keyframe still for Wan 2.2 14B...');
-        const still = await generateFreeImageCascade(
-          shot.compiledPrompt,
-          shot.width >= shot.height ? 1024 : 576,
-          shot.width >= shot.height ? 576 : 1024,
-          shot.seed,
-          'turbo',
-          onProgress,
-          shot.negativePrompt,
-          shot.steps,
-          undefined
-        );
-        keyframeDataUrl = still.dataUrl;
-        actualSeed = still.seed;
-      } catch (e) {
-        videoErrors.push(`Keyframe: ${e instanceof Error ? e.message : 'failed'}`);
-      }
-    }
-
-    if (keyframeDataUrl) {
-      try {
-        const res = await generateVideoViaWan22Fast(shot, keyframeDataUrl, onProgress, hfToken);
-        return await attachFreeSyncedAudioIfEnabled(res);
-      } catch (e) {
-        videoErrors.push(`Wan 2.2 FP8: ${e instanceof Error ? e.message : 'failed'}`);
-      }
-    }
-
-    // 5. #4 Fallback: Legacy LTX-Video Distilled
-    try {
-      const res = await generateVideoViaDirectHfLtx(shot, onProgress, hfToken);
+      const res = await generateVideoViaServerRelay(shot, onProgress, hfToken);
       return await attachFreeSyncedAudioIfEnabled(res);
     } catch (e) {
-      videoErrors.push(`LTX-Video: ${e instanceof Error ? e.message : 'failed'}`);
+      videoErrors.push(`Cloud LTX-Video: ${e instanceof Error ? e.message : 'failed'}`);
     }
 
     // NEVER silently substitute a fake static-image Ken Burns zoom!
     throw new Error(
-      `HF ZeroGPU daily quota busy or exhausted. Click "Setup Free GPU" to switch to Free Colab T4 16 GB. [${videoErrors[videoErrors.length - 1] || 'ZeroGPU unavailable'}]`
+      hfToken
+        ? `HF ZeroGPU daily quota busy or exhausted. Click "Setup Free GPU" to switch to Free Colab T4 16 GB. [${videoErrors[videoErrors.length - 1] || 'ZeroGPU unavailable'}]`
+        : `Free Cloud LTX-Video queue is currently saturated. Click "Setup Free GPU" to connect a free HF token (unlocks LTX-2.5 22B) or Free Colab T4 16 GB. [${videoErrors[videoErrors.length - 1] || 'busy'}]`
     );
   }
 
