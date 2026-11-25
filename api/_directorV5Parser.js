@@ -498,15 +498,15 @@ export function extractLedgerUpdates(text, promptBlocks = []) {
     if (files.length === 0) continue;
 
     let status = null;
-    if (/REF BOUND/i.test(line)) status = 'REF BOUND';
-    else if (
-      /APPROVED(?:\s+IN\s+O-6|\s*\(verified_on_disk\))?/i.test(line) &&
-      !/never\s+APPROVED/i.test(line) &&
+    if (/REF BOUND/i.test(line)) {
+      status = 'REF BOUND';
+    } else if (/QUEUE A REQUIRED|PENDING|card required|never\s+(?:pre-)?approved/i.test(line)) {
+      status = 'PENDING';
+    } else if (
+      /(?<![-\w])APPROVED\b(?:\s+IN\s+O-6|\s*\(verified_on_disk\))?/i.test(line) &&
       !/Confirm\s+/i.test(line)
     ) {
       status = 'APPROVED';
-    } else if (/QUEUE A REQUIRED|PENDING|card required/i.test(line)) {
-      status = 'PENDING';
     }
 
     const tokenMatch = /(@[A-Z0-9_-]+)/.exec(line);

@@ -160,7 +160,9 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
 
-  const processingRef = useRef(false);
+  const activeImageJobsRef = useRef<Set<string>>(new Set());
+  const activeVideoJobsRef = useRef<Set<string>>(new Set());
+  const [queueTick, setQueueTick] = useState(0);
   const deletedShotIdsRef = useRef<Set<string>>(new Set());
   const nextLabelCounterRef = useRef(1);
   const blobUrlsRef = useRef<Record<string, string>>({});
@@ -265,7 +267,11 @@ export default function App() {
       );
       const recovered: MediaShot[] = [];
         for (const shot of sList) {
-          if (shot.status === 'processing' && !processingRef.current) {
+          if (
+            shot.status === 'processing' &&
+            activeImageJobsRef.current.size === 0 &&
+            activeVideoJobsRef.current.size === 0
+          ) {
             const fixed: MediaShot = {
               ...shot,
               status: 'failed',
@@ -341,109 +347,143 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (processingRef.current) return;
+    const MAX_CONCURRENT_IMAGES = 4;
+    const MAX_CONCURRENT_VIDEOS = 1;
+
     const queued = shots
-      .filter((s) => s.status === 'queued')
+      .filter(
+        (s) =>
+          s.status === 'queued' &&
+          !activeImageJobsRef.current.has(s.id) &&
+          !activeVideoJobsRef.current.has(s.id)
+      )
       .sort((a, b) => a.createdAt - b.createdAt);
     if (queued.length === 0) return;
 
-    const target = queued[0];
-    processingRef.current = true;
+    const toLaunch: MediaShot[] = [];
+    let imgRunning = activeImageJobsRef.current.size;
+    let vidRunning = activeVideoJobsRef.current.size;
 
-    void (async () => {
-      let current: MediaShot = {
-        ...target,
-        status: 'processing',
-        progress: 10,
-        phase: 'Initializing engine...',
-        error: undefined,
-      };
-      await updateShotState(current);
-
-      const onProgress = (pct: number, phase: string) => {
-        current = { ...current, progress: pct, phase };
-        setShots((prev) => prev.map((s) => (s.id === current.id ? current : s)));
-      };
-
-      try {
-        const result =
-          current.kind === 'image'
-            ? await runImageGeneration(current, engineSettings, onProgress)
-            : await runVideoGeneration(current, engineSettings, onProgress);
-
-        const blobKey = `blob_${current.id}`;
-        if (deletedShotIdsRef.current.has(current.id)) return;
-        await saveBlob(blobKey, result.blob);
-        const objUrl = URL.createObjectURL(result.blob);
-        blobUrlsRef.current = { ...blobUrlsRef.current, [blobKey]: objUrl };
-        setBlobUrls({ ...blobUrlsRef.current });
-
-        let thumb = result.thumbnailDataUrl;
-        if (!thumb && current.kind === 'image') {
-          thumb = await blobToDataUrl(result.blob);
-        }
-
-        const doneShot: MediaShot = {
-          ...current,
-          status: 'completed',
-          progress: 100,
-          phase: 'Saved in IndexedDB Vault',
-          blobKey,
-          model: result.providerLabel,
-          seed: result.seed,
-          thumbnailDataUrl: thumb,
-          omniInteractionId: result.omniInteractionId ?? current.omniInteractionId,
-          hasSyncedAudio: result.hasSyncedAudio ?? current.hasSyncedAudio,
-          completedAt: Date.now(),
-        };
-        await updateShotState(doneShot);
-        // Auto-bind finished Studio renders dispatched from Director v5 into the Asset Inventory Ledger
-        if (doneShot.directorMeta?.sessionId) {
-          const meta = doneShot.directorMeta;
-          const targetSession = directorSessionsRef.current.find((s) => s.id === meta.sessionId);
-          if (targetSession) {
-            const filename =
-              meta.assetFilename ||
-              `${doneShot.label.toLowerCase()}.${doneShot.kind === 'video' ? 'mp4' : 'jpg'}`;
-            const inferred = inferLedgerMetaFromFilename(filename);
-            const updatedLedger = mergeLedgerUpdates(targetSession.ledger, [
-              {
-                filename,
-                token: meta.token || inferred.token,
-                role: meta.role || inferred.role,
-                status: 'APPROVED',
-                shotId: meta.shotId,
-                linkedShotId: doneShot.id,
-                previewDataUrl: thumb,
-              },
-            ]);
-            const updatedSession: DirectorV5Session = {
-              ...targetSession,
-              ledger: updatedLedger,
-              updatedAt: Date.now(),
-            };
-            await saveDirectorSession(updatedSession);
-            setDirectorSessions((prev) =>
-              prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
-            );
-            showToast(`Rendered ${doneShot.label} & auto-bound ${filename} into Director Ledger!`);
-          }
-        }
-        await refreshVaultUsage();
-      } catch (err) {
-        const failedShot: MediaShot = {
-          ...current,
-          status: 'failed',
-          progress: 0,
-          phase: 'Failed',
-          error: err instanceof Error ? err.message : 'Generation error',
-        };
-        await updateShotState(failedShot);
-      } finally {
-        processingRef.current = false;
+    for (const candidate of queued) {
+      if (candidate.kind === 'image' && imgRunning < MAX_CONCURRENT_IMAGES) {
+        activeImageJobsRef.current.add(candidate.id);
+        imgRunning += 1;
+        toLaunch.push(candidate);
+      } else if (candidate.kind === 'video' && vidRunning < MAX_CONCURRENT_VIDEOS) {
+        activeVideoJobsRef.current.add(candidate.id);
+        vidRunning += 1;
+        toLaunch.push(candidate);
       }
-    })();
-  }, [shots, engineSettings, updateShotState, refreshVaultUsage]);
+    }
+
+    if (toLaunch.length === 0) return;
+
+    for (const target of toLaunch) {
+      void (async () => {
+        let current: MediaShot = {
+          ...target,
+          status: 'processing',
+          progress: 10,
+          phase: 'Initializing engine...',
+          error: undefined,
+        };
+        await updateShotState(current);
+
+        const onProgress = (pct: number, phase: string) => {
+          current = { ...current, progress: pct, phase };
+          setShots((prev) => prev.map((s) => (s.id === current.id ? current : s)));
+        };
+
+        try {
+          const result =
+            current.kind === 'image'
+              ? await runImageGeneration(current, engineSettings, onProgress)
+              : await runVideoGeneration(current, engineSettings, onProgress);
+
+          const blobKey = `blob_${current.id}`;
+          if (deletedShotIdsRef.current.has(current.id)) return;
+          await saveBlob(blobKey, result.blob);
+          const objUrl = URL.createObjectURL(result.blob);
+          blobUrlsRef.current = { ...blobUrlsRef.current, [blobKey]: objUrl };
+          setBlobUrls({ ...blobUrlsRef.current });
+
+          let thumb = result.thumbnailDataUrl;
+          if (!thumb && current.kind === 'image') {
+            thumb = await blobToDataUrl(result.blob);
+          }
+
+          const doneShot: MediaShot = {
+            ...current,
+            status: 'completed',
+            progress: 100,
+            phase: 'Saved in IndexedDB Vault',
+            blobKey,
+            model: result.providerLabel,
+            seed: result.seed,
+            thumbnailDataUrl: thumb,
+            omniInteractionId: result.omniInteractionId ?? current.omniInteractionId,
+            hasSyncedAudio: result.hasSyncedAudio ?? current.hasSyncedAudio,
+            completedAt: Date.now(),
+          };
+          await updateShotState(doneShot);
+
+          // Auto-bind finished single-take Studio renders dispatched from Director v5 into the Ledger
+          // (4x Frame Quartet takes intentionally wait for operator to click Pick Winner A/B/C/D)
+          if (doneShot.directorMeta?.sessionId) {
+            const meta = doneShot.directorMeta;
+            const targetSession = directorSessionsRef.current.find((s) => s.id === meta.sessionId);
+            const dispatchedRef = targetSession?.dispatchedJobs?.[meta.blockId];
+            const isMultiQuartet = Array.isArray(dispatchedRef) && dispatchedRef.length > 1;
+            if (targetSession && !isMultiQuartet) {
+              const filename =
+                meta.assetFilename ||
+                `${doneShot.label.toLowerCase()}.${doneShot.kind === 'video' ? 'mp4' : 'jpg'}`;
+              const inferred = inferLedgerMetaFromFilename(filename);
+              const updatedLedger = mergeLedgerUpdates(targetSession.ledger, [
+                {
+                  filename,
+                  token: meta.token || inferred.token,
+                  role: meta.role || inferred.role,
+                  status: 'APPROVED',
+                  shotId: meta.shotId,
+                  linkedShotId: doneShot.id,
+                  previewDataUrl: thumb,
+                },
+              ]);
+              const updatedSession: DirectorV5Session = {
+                ...targetSession,
+                ledger: updatedLedger,
+                updatedAt: Date.now(),
+              };
+              await saveDirectorSession(updatedSession);
+              setDirectorSessions((prev) =>
+                prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
+              );
+              showToast(`Rendered ${doneShot.label} & auto-bound ${filename} into Director Ledger!`);
+            }
+          }
+          await refreshVaultUsage();
+        } catch (err) {
+          const failedShot: MediaShot = {
+            ...current,
+            status: 'failed',
+            progress: 0,
+            phase: 'Failed',
+            error: err instanceof Error ? err.message : 'Generation error',
+          };
+          await updateShotState(failedShot);
+        } finally {
+          if (target.kind === 'image') {
+            activeImageJobsRef.current.delete(target.id);
+          } else {
+            activeVideoJobsRef.current.delete(target.id);
+          }
+          // Guaranteed queue wakeup so remaining queued jobs can never stall
+          setQueueTick((t) => t + 1);
+        }
+      })();
+    }
+  }, [shots, queueTick, engineSettings, updateShotState, refreshVaultUsage, showToast]);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? null,
@@ -553,7 +593,7 @@ export default function App() {
       created.push(newShot);
     }
 
-    setShots((prev) => [...created.reverse(), ...prev]);
+    setShots((prev) => [...[...created].reverse(), ...prev]);
     setPrompt('');
     if (payload.mode === 'i2v') {
       setStartFrameDataUrl(undefined);
@@ -609,7 +649,7 @@ export default function App() {
       created.push(shot);
     }
 
-    setShots((prev) => [...created.reverse(), ...prev]);
+    setShots((prev) => [...[...created].reverse(), ...prev]);
     showToast(`Queued ${created.length} shots from script!`);
   };
 
@@ -1034,7 +1074,7 @@ export default function App() {
       created.push(newShot);
     }
 
-    setShots((prev) => [...created.reverse(), ...prev]);
+    setShots((prev) => [...[...created].reverse(), ...prev]);
 
     if (session && created.length > 0) {
       const updatedSession: DirectorV5Session = {

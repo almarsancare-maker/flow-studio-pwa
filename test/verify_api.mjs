@@ -386,6 +386,10 @@ console.log('--- FlowStudio PWA Phase 2 API & SSRF Tests ---');
   assert.equal(rFast.result.body.stage, 'build_gate');
   assert.ok(rFast.result.body.text.includes('carlo_w1_sheet.jpg'), 'Missing carlo_w1_sheet.jpg');
   assert.ok(rFast.result.body.text.includes('elena_w1_sheet.jpg'), 'Missing elena_w1_sheet.jpg');
+  const preApprovedCarlo = (rFast.result.body.ledgerUpdates || []).find(
+    (x) => x.filename === 'carlo_w1_sheet.jpg' && x.status !== 'PENDING'
+  );
+  assert.equal(preApprovedCarlo, undefined, 'carlo_w1_sheet.jpg must NEVER be pre-approved before render!');
 
   // Option 1 -> BUILD -> verifies verbatim dialogue + multi-character Queue A + zero @MIRA leak
   const rBuild = createMockRes();
