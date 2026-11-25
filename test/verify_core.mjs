@@ -9,6 +9,10 @@ import {
   normalizeTag,
   parseScriptShotList,
 } from '../src/utils/promptCompiler.ts';
+import {
+  inferLedgerMetaFromFilename,
+  mergeLedgerUpdates,
+} from '../src/services/directorV5.ts';
 
 console.log('--- FlowStudio PWA Phase 1 Core Tests ---');
 
@@ -83,5 +87,43 @@ const vercelCfg = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'ut
 assert.equal(vercelCfg.outputDirectory, 'dist');
 assert.ok(fs.existsSync(path.join(root, 'public', 'icon.svg')));
 console.log('[PASS] Test 4: Vercel & PWA config files verified');
+
+// Test 5: Director v5.0.3 Asset Inventory Ledger inference & Never-Regenerate Law
+assert.deepEqual(inferLedgerMetaFromFilename('mara_w1_sheet.jpg'), {
+  token: '@MARA_W1',
+  role: 'face lock',
+});
+assert.deepEqual(inferLedgerMetaFromFilename('blueprint_rain_dorm.jpg'), {
+  token: '@SET-RAIN_DORM',
+  role: 'blueprint',
+});
+assert.deepEqual(inferLedgerMetaFromFilename('prop_sketchbook_sheet.jpg'), {
+  token: '@PROP-SKETCHBOOK',
+  role: 'prop lock',
+});
+assert.deepEqual(inferLedgerMetaFromFilename('S1_f.jpg'), {
+  token: 'S1',
+  role: 'start frame',
+});
+
+let ledger = mergeLedgerUpdates([], [
+  { filename: 'mara_w1_sheet.jpg', status: 'REF BOUND' },
+  { filename: 'set_lab_sheet.jpg', status: 'PENDING' },
+]);
+assert.equal(ledger.length, 2);
+assert.equal(ledger[0].filename, 'mara_w1_sheet.jpg');
+assert.equal(ledger[0].status, 'REF BOUND');
+
+// Never-Regenerate Law: automatic update with PENDING must never downgrade REF BOUND
+ledger = mergeLedgerUpdates(ledger, [
+  { filename: 'mara_w1_sheet.jpg', status: 'PENDING' },
+  { filename: 'set_lab_sheet.jpg', status: 'APPROVED', linkedShotId: 'shot_1' },
+]);
+const maraRow = ledger.find((x) => x.filename === 'mara_w1_sheet.jpg');
+const setRow = ledger.find((x) => x.filename === 'set_lab_sheet.jpg');
+assert.equal(maraRow.status, 'REF BOUND');
+assert.equal(setRow.status, 'APPROVED');
+assert.equal(setRow.linkedShotId, 'shot_1');
+console.log('[PASS] Test 5: Director v5.0.3 Asset Inventory Ledger & Never-Regenerate Law verified');
 
 console.log('ALL_PHASE1_CORE_TESTS_PASSED');

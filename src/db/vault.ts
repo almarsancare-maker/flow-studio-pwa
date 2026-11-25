@@ -1,8 +1,14 @@
-import type { BibleEntry, EngineSettings, MediaShot, Project } from '../types/studio';
+import type {
+  BibleEntry,
+  DirectorV5Session,
+  EngineSettings,
+  MediaShot,
+  Project,
+} from '../types/studio';
 import { DEFAULT_ENGINE_SETTINGS } from '../types/studio';
 
 const DB_NAME = 'flowstudio_vault_v1';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   PROJECTS: 'projects',
@@ -10,6 +16,7 @@ const STORES = {
   MEDIA: 'media',
   BLOBS: 'blobs',
   SETTINGS: 'settings',
+  DIRECTOR_SESSIONS: 'director_sessions',
 } as const;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -36,6 +43,10 @@ function openVault(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
         db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(STORES.DIRECTOR_SESSIONS)) {
+        const s = db.createObjectStore(STORES.DIRECTOR_SESSIONS, { keyPath: 'id' });
+        s.createIndex('by_project', 'projectId', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -72,9 +83,10 @@ export async function saveProject(project: Project): Promise<void> {
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  const [shots, entries] = await Promise.all([
+  const [shots, entries, sessions] = await Promise.all([
     listProjectShots(projectId),
     listProjectBible(projectId),
+    listProjectDirectorSessions(projectId),
   ]);
   for (const shot of shots) {
     if (shot.blobKey) await deleteBlob(shot.blobKey);
@@ -83,7 +95,33 @@ export async function deleteProject(projectId: string): Promise<void> {
   for (const entry of entries) {
     await deleteBibleEntry(entry.id);
   }
+  for (const sess of sessions) {
+    await deleteDirectorSession(sess.id);
+  }
   await txRun(STORES.PROJECTS, 'readwrite', (s) => s.delete(projectId));
+}
+
+// ── Director v5.0.3 Sessions & Asset Inventory Ledger ─────────────────
+export async function listProjectDirectorSessions(projectId: string): Promise<DirectorV5Session[]> {
+  const db = await openVault();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.DIRECTOR_SESSIONS, 'readonly');
+    const idx = tx.objectStore(STORES.DIRECTOR_SESSIONS).index('by_project');
+    const req = idx.getAll(projectId);
+    req.onsuccess = () => {
+      const list = (req.result as DirectorV5Session[]).sort((a, b) => b.updatedAt - a.updatedAt);
+      resolve(list);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function saveDirectorSession(session: DirectorV5Session): Promise<void> {
+  await txRun(STORES.DIRECTOR_SESSIONS, 'readwrite', (s) => s.put(session));
+}
+
+export async function deleteDirectorSession(id: string): Promise<void> {
+  await txRun(STORES.DIRECTOR_SESSIONS, 'readwrite', (s) => s.delete(id));
 }
 
 // ── Bible (@TAG Vault) ────────────────────────────────────────────────
@@ -185,9 +223,10 @@ export async function getVaultUsageBytes(): Promise<{ usedMB: number; quotaMB: n
 
 // ── Portable Project Backup (Fixes Multi-Profile Lock-In) ─────────────
 export async function exportProjectManifestJson(project: Project): Promise<string> {
-  const [bible, shots] = await Promise.all([
+  const [bible, shots, directorSessions] = await Promise.all([
     listProjectBible(project.id),
     listProjectShots(project.id),
+    listProjectDirectorSessions(project.id),
   ]);
   return JSON.stringify(
     {
@@ -196,6 +235,7 @@ export async function exportProjectManifestJson(project: Project): Promise<strin
       project,
       bible,
       shots,
+      directorSessions,
     },
     null,
     2
@@ -210,6 +250,7 @@ export async function importProjectManifestJson(
     project?: Partial<Project>;
     bible?: BibleEntry[];
     shots?: MediaShot[];
+    directorSessions?: DirectorV5Session[];
   };
   if (!parsed || parsed.schema !== 'flowstudio-project-v1' || !parsed.project?.name) {
     throw new Error('Invalid Cabardo Studio project backup JSON.');
@@ -246,6 +287,16 @@ export async function importProjectManifestJson(
       projectId: newProjectId,
       blobKey: undefined,
       status: s.thumbnailDataUrl ? 'completed' : 'queued',
+    });
+  }
+
+  const directorList = Array.isArray(parsed.directorSessions) ? parsed.directorSessions : [];
+  for (let i = 0; i < directorList.length; i++) {
+    const d = directorList[i];
+    await saveDirectorSession({
+      ...d,
+      id: `dir_imp_${now}_${i}`,
+      projectId: newProjectId,
     });
   }
 

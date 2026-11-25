@@ -2,17 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   deleteBibleEntry,
   deleteBlob,
+  deleteDirectorSession,
   deleteShot,
   exportProjectManifestJson,
   getVaultUsageBytes,
   importProjectManifestJson,
   listProjectBible,
+  listProjectDirectorSessions,
   listProjectShots,
   listProjects,
   loadBlob,
   loadEngineSettings,
   saveBibleEntry,
   saveBlob,
+  saveDirectorSession,
   saveEngineSettings,
   saveProject,
   saveShot,
@@ -22,13 +25,18 @@ import {
   DEFAULT_ENGINE_SETTINGS,
   type AspectRatio,
   type BibleEntry,
+  type DirectorAssetLedgerItem,
+  type DirectorPromptBlock,
+  type DirectorV5Session,
   type EngineSettings,
   type GenerationMode,
   type MediaShot,
   type ParsedScriptShot,
   type Project,
+  type WorkspaceView,
 } from './types/studio';
-import { compilePromptWithBible } from './utils/promptCompiler';
+import { compilePromptWithBible, normalizeTag } from './utils/promptCompiler';
+import { inferLedgerMetaFromFilename, mergeLedgerUpdates } from './services/directorV5';
 import { blobToDataUrl, grabVideoFrame } from './utils/frameGrabber';
 import {
   fetchServerCapabilities,
@@ -51,6 +59,7 @@ import { LightboxModal } from './components/LightboxModal';
 import { StoryboardBar } from './components/StoryboardBar';
 import { ScriptImportModal } from './components/ScriptImportModal';
 import { EngineModal } from './components/EngineModal';
+import { DirectorV5View } from './components/DirectorV5View';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -138,6 +147,11 @@ export default function App() {
   const [endFrameDataUrl, setEndFrameDataUrl] = useState<string | undefined>(undefined);
   const [remixRecipe, setRemixRecipe] = useState<RemixRecipePayload | null>(null);
 
+  // Active primary workspace view (Studio | Director v5)
+  const [activeView, setActiveView] = useState<WorkspaceView>('studio');
+  const [directorSessions, setDirectorSessions] = useState<DirectorV5Session[]>([]);
+  const [activeDirectorSessionId, setActiveDirectorSessionId] = useState<string>('');
+
   // Drawers / Modals / Toast
   const [bibleOpen, setBibleOpen] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
@@ -150,7 +164,12 @@ export default function App() {
   const deletedShotIdsRef = useRef<Set<string>>(new Set());
   const nextLabelCounterRef = useRef(1);
   const blobUrlsRef = useRef<Record<string, string>>({});
+  const directorSessionsRef = useRef<DirectorV5Session[]>([]);
   const toastTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    directorSessionsRef.current = directorSessions;
+  }, [directorSessions]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -231,13 +250,20 @@ export default function App() {
     }
   }, [activeProjectId]);
 
-  // Load project Bible + Shots whenever activeProjectId changes, recovering any interrupted renders
+  // Load project Bible + Shots + Director v5 Sessions whenever activeProjectId changes
   useEffect(() => {
     if (!activeProjectId) return;
-    void Promise.all([listProjectBible(activeProjectId), listProjectShots(activeProjectId)]).then(
-      async ([bList, sList]) => {
-        setBible(bList);
-        const recovered: MediaShot[] = [];
+    void Promise.all([
+      listProjectBible(activeProjectId),
+      listProjectShots(activeProjectId),
+      listProjectDirectorSessions(activeProjectId),
+    ]).then(async ([bList, sList, dList]) => {
+      setBible(bList);
+      setDirectorSessions(dList);
+      setActiveDirectorSessionId((prev) =>
+        dList.some((d) => d.id === prev) ? prev : dList[0]?.id ?? ''
+      );
+      const recovered: MediaShot[] = [];
         for (const shot of sList) {
           if (shot.status === 'processing' && !processingRef.current) {
             const fixed: MediaShot = {
@@ -371,6 +397,38 @@ export default function App() {
           completedAt: Date.now(),
         };
         await updateShotState(doneShot);
+        // Auto-bind finished Studio renders dispatched from Director v5 into the Asset Inventory Ledger
+        if (doneShot.directorMeta?.sessionId) {
+          const meta = doneShot.directorMeta;
+          const targetSession = directorSessionsRef.current.find((s) => s.id === meta.sessionId);
+          if (targetSession) {
+            const filename =
+              meta.assetFilename ||
+              `${doneShot.label.toLowerCase()}.${doneShot.kind === 'video' ? 'mp4' : 'jpg'}`;
+            const inferred = inferLedgerMetaFromFilename(filename);
+            const updatedLedger = mergeLedgerUpdates(targetSession.ledger, [
+              {
+                filename,
+                token: meta.token || inferred.token,
+                role: meta.role || inferred.role,
+                status: 'APPROVED',
+                shotId: meta.shotId,
+                linkedShotId: doneShot.id,
+                previewDataUrl: thumb,
+              },
+            ]);
+            const updatedSession: DirectorV5Session = {
+              ...targetSession,
+              ledger: updatedLedger,
+              updatedAt: Date.now(),
+            };
+            await saveDirectorSession(updatedSession);
+            setDirectorSessions((prev) =>
+              prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
+            );
+            showToast(`Rendered ${doneShot.label} & auto-bound ${filename} into Director Ledger!`);
+          }
+        }
         await refreshVaultUsage();
       } catch (err) {
         const failedShot: MediaShot = {
@@ -853,6 +911,199 @@ export default function App() {
     await refreshVaultUsage();
   };
 
+  const handleSaveDirectorSession = useCallback(async (session: DirectorV5Session) => {
+    await saveDirectorSession(session);
+    setDirectorSessions((prev) => {
+      const exists = prev.some((s) => s.id === session.id);
+      const next = exists
+        ? prev.map((s) => (s.id === session.id ? session : s))
+        : [session, ...prev];
+      return next.sort((a, b) => b.updatedAt - a.updatedAt);
+    });
+  }, []);
+
+  const handleDeleteDirectorSession = useCallback(async (id: string) => {
+    await deleteDirectorSession(id);
+    setDirectorSessions((prev) => {
+      const remaining = prev.filter((s) => s.id !== id);
+      setActiveDirectorSessionId((cur) => (cur === id ? remaining[0]?.id ?? '' : cur));
+      return remaining;
+    });
+  }, []);
+
+  const handleDispatchDirectorBlock = async (
+    sessionId: string,
+    block: DirectorPromptBlock,
+    takeCount: 1 | 4 = 1
+  ) => {
+    if (!activeProjectId) return;
+    const session = directorSessionsRef.current.find((s) => s.id === sessionId);
+    const ledgerList = session?.ledger ?? [];
+
+    // Resolve exact attached reference images from the Asset Inventory Ledger (§5.4)
+    let resolvedStartFrame: string | undefined;
+    const resolvedRefs: string[] = [];
+
+    for (const fn of block.attachFiles || []) {
+      const match = ledgerList.find((i) => i.filename.toLowerCase() === fn.toLowerCase());
+      if (!match) continue;
+      let dataUrl = match.previewDataUrl;
+      if (!dataUrl && match.linkedShotId) {
+        const linked = shots.find((s) => s.id === match.linkedShotId);
+        if (linked?.thumbnailDataUrl) {
+          dataUrl = linked.thumbnailDataUrl;
+        } else if (linked?.blobKey) {
+          const b = await loadBlob(linked.blobKey);
+          if (b && linked.kind === 'image') dataUrl = await blobToDataUrl(b);
+        }
+      }
+      if (!dataUrl) continue;
+      if (!resolvedStartFrame && /_f(?:-[a-d])?\.(?:jpg|jpeg|png|webp)$/i.test(fn)) {
+        resolvedStartFrame = dataUrl;
+      } else if (resolvedRefs.length < 4) {
+        resolvedRefs.push(dataUrl);
+      }
+    }
+
+    const kind: 'image' | 'video' = block.generationKind === 'video' ? 'video' : 'image';
+    const targetMode: GenerationMode =
+      kind === 'image' ? 't2i' : resolvedStartFrame ? 'i2v' : 't2v';
+    const ar: AspectRatio = (['16:9', '9:16', '1:1', '21:9'].includes(block.aspectRatio)
+      ? block.aspectRatio
+      : '16:9') as AspectRatio;
+    const [width, height] = ASPECT_DIMENSIONS[ar][kind];
+    const compiled = compilePromptWithBible(block.promptText, bible);
+    const inferred = block.assetFilename
+      ? inferLedgerMetaFromFilename(block.assetFilename)
+      : { token: block.shotId || '@DIRECTOR', role: kind === 'video' ? 'finished clip' : 'reference' };
+
+    const baseSeed = compiled.suggestedSeed ?? Math.floor(Math.random() * 2_000_000_000);
+    const baseTime = Date.now();
+    const created: MediaShot[] = [];
+
+    for (let i = 0; i < takeCount; i++) {
+      const shotSeed = i === 0 ? baseSeed : (baseSeed + i * 7919) % 2_000_000_000;
+      const newShot: MediaShot = {
+        id: makeId(`dirshot${i}`),
+        projectId: activeProjectId,
+        label: nextShotLabel(),
+        kind,
+        mode: targetMode,
+        status: 'queued',
+        progress: 5,
+        phase:
+          takeCount > 1
+            ? `Queued Quartet Take ${i + 1}/${takeCount}...`
+            : `Queued from Director v5 (${block.assetFilename || block.shotId || kind})...`,
+        rawPrompt: block.promptText,
+        compiledPrompt: compiled.compiledPrompt,
+        negativePrompt:
+          'blurry, deformed hands, extra limbs, watermark, text, printed color swatches, hex code text strings, waxy skin',
+        appliedTags: compiled.appliedTags,
+        aspectRatio: ar,
+        width,
+        height,
+        durationSec: block.durationSec || 5,
+        fps: 24,
+        steps: 24,
+        cfgScale: 6.5,
+        seed: shotSeed,
+        engine: engineSettings.activeEngine,
+        model:
+          kind === 'image'
+            ? `Free ${engineSettings.freeImageModel.toUpperCase()} (Director v5)`
+            : engineSettings.activeEngine === 'colab-t4'
+              ? engineSettings.colabModelVideo
+              : engineSettings.activeEngine === 'gemini-omni'
+                ? `Gemini Omni 1.2 (${engineSettings.omniResolution})`
+                : 'Free 24/7 Video (Director v5)',
+        startFrameDataUrl: targetMode === 'i2v' ? resolvedStartFrame : undefined,
+        referenceImages: resolvedRefs,
+        directorMeta: {
+          sessionId,
+          blockId: block.id,
+          assetFilename: block.assetFilename,
+          token: inferred.token,
+          role: inferred.role,
+          shotId: block.shotId,
+        },
+        storyboardOrder: null,
+        createdAt: baseTime + i,
+      };
+      await saveShot(newShot);
+      created.push(newShot);
+    }
+
+    setShots((prev) => [...created.reverse(), ...prev]);
+
+    if (session && created[0]) {
+      const updatedSession: DirectorV5Session = {
+        ...session,
+        dispatchedJobs: {
+          ...session.dispatchedJobs,
+          [block.id]: created[0].id,
+        },
+        updatedAt: Date.now(),
+      };
+      await handleSaveDirectorSession(updatedSession);
+    }
+
+    showToast(
+      takeCount > 1
+        ? `Dispatched ${takeCount}× Quartet takes (${created.map((c) => c.label).join(', ')}) to Studio queue!`
+        : `Dispatched ${created[0].label} (${block.assetFilename || kind.toUpperCase()}) to Studio queue!`
+    );
+  };
+
+  const handleSyncLedgerToBible = async (items: DirectorAssetLedgerItem[]) => {
+    if (!activeProjectId) return;
+    const eligible = items.filter((i) => i.status === 'REF BOUND' || i.status === 'APPROVED');
+    let added = 0;
+    const nextBible = [...bible];
+
+    for (const item of eligible) {
+      const norm = normalizeTag(item.token);
+      if (!norm) continue;
+      const existing = nextBible.find((b) => normalizeTag(b.tag) === norm);
+      const category = item.role.includes('spatial') || item.role === 'blueprint'
+        ? 'location'
+        : item.role.includes('prop')
+          ? 'prop'
+          : 'character';
+
+      if (existing) {
+        if (item.previewDataUrl && !existing.refImageDataUrl) {
+          const updated: BibleEntry = { ...existing, refImageDataUrl: item.previewDataUrl };
+          await saveBibleEntry(updated);
+          const idx = nextBible.findIndex((b) => b.id === existing.id);
+          if (idx >= 0) nextBible[idx] = updated;
+          added += 1;
+        }
+      } else {
+        const entry: BibleEntry = {
+          id: makeId('bible_dir'),
+          projectId: activeProjectId,
+          tag: norm,
+          category,
+          title: norm.slice(1),
+          descriptor: `Director v5.0.3 bound reference (${item.filename} — ${item.role})`,
+          refImageDataUrl: item.previewDataUrl,
+          createdAt: Date.now() + added,
+        };
+        await saveBibleEntry(entry);
+        nextBible.push(entry);
+        added += 1;
+      }
+    }
+
+    setBible(nextBible.sort((a, b) => a.tag.localeCompare(b.tag)));
+    showToast(
+      added > 0
+        ? `Synced ${added} bound Director asset(s) into Character & Location Bible!`
+        : 'All bound Director assets are already in your Project Bible.'
+    );
+  };
+
   const handleExportProjectJson = async () => {
     if (!activeProject) return;
     const json = await exportProjectManifestJson(activeProject);
@@ -887,6 +1138,8 @@ export default function App() {
       <TopBar
         projects={projects}
         activeProject={activeProject}
+        activeView={activeView}
+        onChangeView={setActiveView}
         onSelectProject={setActiveProjectId}
         onCreateProject={(name) => void handleCreateProject(name)}
         engineSettings={engineSettings}
@@ -918,85 +1171,111 @@ export default function App() {
         </button>
       )}
 
-      {/* Main Media Canvas */}
-      <main data-testid="flow-main-canvas" className="flex-1 flex flex-col">
-        <MediaGrid
-          shots={shots}
-          blobUrls={blobUrls}
-          onOpenLightbox={(shot) => setLightboxShotId(shot.id)}
-          onToggleStoryboard={(shot) => void handleToggleStoryboard(shot)}
-          onAnimateStill={(shot) => void handleAnimateStill(shot)}
-          onGrabLastFrame={(shot) => void handleGrabLastFrameFromCard(shot)}
-          onRemixShot={(shot) => {
-            setPrompt(shot.rawPrompt);
-            setMode(shot.mode);
-            setAspectRatio(shot.aspectRatio);
-            setRemixRecipe({
-              nonce: Date.now(),
-              negativePrompt: shot.negativePrompt,
-              seed: shot.seed,
-              steps: shot.steps,
-              cfgScale: shot.cfgScale,
-              durationSec: shot.durationSec,
-            });
-            showToast(`Loaded ${shot.label} full recipe (seed ${shot.seed} locked) into composer`);
-          }}
-          onRetryShot={(shot) =>
-            void updateShotState({
-              ...shot,
-              status: 'queued',
-              progress: 5,
-              phase: 'Retrying...',
-              error: undefined,
-            })
-          }
-          onRetryAllFailed={() => void handleRetryAllFailed()}
-          onOpenEngine={() => setEngineOpen(true)}
-          onCancelShot={(shot) => void handleDeleteShot(shot)}
-          onDownloadShot={(shot) => void handleDownloadShot(shot)}
-          onDeleteShot={(shot) => void handleDeleteShot(shot)}
-          onQuickPrompt={(sample, targetMode) => {
-            setPrompt(sample);
-            if (targetMode) setMode(targetMode);
-          }}
-        />
-      </main>
+      {activeView === 'director' ? (
+        <main data-testid="director-main-canvas" className="flex-1 flex flex-col">
+          <DirectorV5View
+            projectId={activeProjectId}
+            sessions={directorSessions}
+            activeSessionId={activeDirectorSessionId}
+            shots={shots}
+            blobUrls={blobUrls}
+            bible={bible}
+            engineSettings={engineSettings}
+            serverKeys={serverKeys}
+            onSelectSession={setActiveDirectorSessionId}
+            onSaveSession={handleSaveDirectorSession}
+            onDeleteSession={handleDeleteDirectorSession}
+            onDispatchPromptBlock={handleDispatchDirectorBlock}
+            onSyncLedgerToBible={handleSyncLedgerToBible}
+            onOpenLightbox={(shot) => setLightboxShotId(shot.id)}
+            onOpenStudio={() => setActiveView('studio')}
+            onOpenEngine={() => setEngineOpen(true)}
+            onShowToast={showToast}
+          />
+        </main>
+      ) : (
+        <>
+          {/* Main Media Canvas */}
+          <main data-testid="flow-main-canvas" className="flex-1 flex flex-col">
+            <MediaGrid
+              shots={shots}
+              blobUrls={blobUrls}
+              onOpenLightbox={(shot) => setLightboxShotId(shot.id)}
+              onToggleStoryboard={(shot) => void handleToggleStoryboard(shot)}
+              onAnimateStill={(shot) => void handleAnimateStill(shot)}
+              onGrabLastFrame={(shot) => void handleGrabLastFrameFromCard(shot)}
+              onRemixShot={(shot) => {
+                setPrompt(shot.rawPrompt);
+                setMode(shot.mode);
+                setAspectRatio(shot.aspectRatio);
+                setRemixRecipe({
+                  nonce: Date.now(),
+                  negativePrompt: shot.negativePrompt,
+                  seed: shot.seed,
+                  steps: shot.steps,
+                  cfgScale: shot.cfgScale,
+                  durationSec: shot.durationSec,
+                });
+                showToast(`Loaded ${shot.label} full recipe (seed ${shot.seed} locked) into composer`);
+              }}
+              onRetryShot={(shot) =>
+                void updateShotState({
+                  ...shot,
+                  status: 'queued',
+                  progress: 5,
+                  phase: 'Retrying...',
+                  error: undefined,
+                })
+              }
+              onRetryAllFailed={() => void handleRetryAllFailed()}
+              onOpenEngine={() => setEngineOpen(true)}
+              onCancelShot={(shot) => void handleDeleteShot(shot)}
+              onDownloadShot={(shot) => void handleDownloadShot(shot)}
+              onDeleteShot={(shot) => void handleDeleteShot(shot)}
+              onQuickPrompt={(sample, targetMode) => {
+                setPrompt(sample);
+                if (targetMode) setMode(targetMode);
+              }}
+            />
+          </main>
 
-      {/* Unified Bottom Cinema Dock */}
-      <div className="md:sticky md:bottom-0 z-30 pt-3 flow-bottom-dock">
-        <StoryboardBar
-          clips={storyboardClips}
-          blobUrls={blobUrls}
-          projectName={activeProject?.name ?? 'flowstudio'}
-          onMoveClip={(id, dir) => void handleMoveStoryboardClip(id, dir)}
-          onReorderClips={(fromId, toId) => void handleReorderStoryboardClips(fromId, toId)}
-          onRemoveClip={(id) => {
-            const target = shots.find((s) => s.id === id);
-            if (target) void updateShotState({ ...target, storyboardOrder: null });
-          }}
-          onExtendFinalClip={(clip) => void handleExtendFinalClip(clip)}
-          onExportComplete={showToast}
-        />
+          {/* Unified Bottom Cinema Dock */}
+          <div className="md:sticky md:bottom-0 z-30 pt-3 flow-bottom-dock">
+            <StoryboardBar
+              clips={storyboardClips}
+              blobUrls={blobUrls}
+              projectName={activeProject?.name ?? 'flowstudio'}
+              onMoveClip={(id, dir) => void handleMoveStoryboardClip(id, dir)}
+              onReorderClips={(fromId, toId) => void handleReorderStoryboardClips(fromId, toId)}
+              onRemoveClip={(id) => {
+                const target = shots.find((s) => s.id === id);
+                if (target) void updateShotState({ ...target, storyboardOrder: null });
+              }}
+              onExtendFinalClip={(clip) => void handleExtendFinalClip(clip)}
+              onExportComplete={showToast}
+            />
 
-        <FloatingComposer
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          mode={mode}
-          onModeChange={setMode}
-          aspectRatio={aspectRatio}
-          onAspectRatioChange={setAspectRatio}
-          startFrameDataUrl={startFrameDataUrl}
-          onStartFrameChange={setStartFrameDataUrl}
-          endFrameDataUrl={endFrameDataUrl}
-          onEndFrameChange={setEndFrameDataUrl}
-          remixRecipe={remixRecipe}
-          engineSettings={engineSettings}
-          bibleEntries={bible}
-          queueCount={activeQueueCount}
-          onSubmit={(payload) => void handleQueueSingleShot(payload)}
-          onOpenEngine={() => setEngineOpen(true)}
-        />
-      </div>
+            <FloatingComposer
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              mode={mode}
+              onModeChange={setMode}
+              aspectRatio={aspectRatio}
+              onAspectRatioChange={setAspectRatio}
+              startFrameDataUrl={startFrameDataUrl}
+              onStartFrameChange={setStartFrameDataUrl}
+              endFrameDataUrl={endFrameDataUrl}
+              onEndFrameChange={setEndFrameDataUrl}
+              remixRecipe={remixRecipe}
+              engineSettings={engineSettings}
+              bibleEntries={bible}
+              queueCount={activeQueueCount}
+              onSubmit={(payload) => void handleQueueSingleShot(payload)}
+              onOpenEngine={() => setEngineOpen(true)}
+            />
+          </div>
+        </>
+      )}
 
       {/* Drawers & Modals */}
       <BibleDrawer

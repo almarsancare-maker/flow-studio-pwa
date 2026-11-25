@@ -65,13 +65,13 @@ function inferRoleFromFilename(filename) {
 
 function inferTokenFromFilename(filename) {
   const f = filename.trim();
-  let m = /^([a-z0-9-]+)_w(\d+)_(?:sheet|facef|bodyf)\./i.exec(f);
+  let m = /^([a-z0-9_-]+)_w(\d+)_(?:sheet|facef|bodyf)\./i.exec(f);
   if (m) return `@${m[1].toUpperCase()}_W${m[2]}`;
-  m = /^set_([a-z0-9-]+)_(?:sheet|angles|main)\./i.exec(f);
+  m = /^set_([a-z0-9_-]+)_(?:sheet|angles|main)\./i.exec(f);
   if (m) return `@SET-${m[1].toUpperCase()}`;
-  m = /^blueprint_([a-z0-9-]+)\./i.exec(f);
+  m = /^blueprint_([a-z0-9_-]+)\./i.exec(f);
   if (m) return `@SET-${m[1].toUpperCase()}`;
-  m = /^prop_([a-z0-9-]+?)(?:_sheet)?\./i.exec(f);
+  m = /^prop_([a-z0-9_-]+?)(?:_sheet)?\./i.exec(f);
   if (m) return `@PROP-${m[1].toUpperCase()}`;
   m = /^(S\d+[A-Za-z]?)(?:_f(?:-[A-D])?|_lastf)?\.(?:jpg|png|webp|mp4)$/i.exec(f);
   if (m) return m[1].toUpperCase();

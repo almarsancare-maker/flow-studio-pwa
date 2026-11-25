@@ -10,6 +10,107 @@ export type TransitionStyle = 'cut' | 'crossfade' | 'fade-black';
 export type AmbientAudioPreset = 'none' | 'tropical-rain' | 'neon-drone' | 'warm-cinema';
 export type BibleCategory = 'character' | 'location' | 'prop' | 'style';
 export type ShotStatus = 'queued' | 'processing' | 'completed' | 'failed';
+export type WorkspaceView = 'studio' | 'director';
+export type DirectorAssetStatus = 'REF BOUND' | 'APPROVED' | 'PENDING';
+
+export interface DirectorShotMeta {
+  sessionId: string;
+  blockId: string;
+  assetFilename?: string;
+  token?: string;
+  role?: string;
+  shotId?: string;
+}
+
+export interface DirectorAssetLedgerItem {
+  id: string;
+  filename: string;
+  token: string;
+  role: string;
+  status: DirectorAssetStatus;
+  shotId?: string;
+  linkedShotId?: string;
+  previewDataUrl?: string;
+  updatedAt: number;
+}
+
+export interface DirectorMenuOption {
+  number: number;
+  label: string;
+  recommended: boolean;
+  isExpress: boolean;
+  isCustom: boolean;
+  value: string;
+}
+
+export interface DirectorPromptBlock {
+  id: string;
+  title: string;
+  category: string;
+  generationKind: 'image' | 'video' | 'meta';
+  assetFilename?: string;
+  shotId?: string;
+  aspectRatio: AspectRatio;
+  durationSec: number;
+  attachFiles: string[];
+  attachLine: string;
+  rawBlock: string;
+  promptText: string;
+  copyText: string;
+  isQuartet?: boolean;
+}
+
+export interface DirectorAcceptanceCell {
+  index: number;
+  name: string;
+  detail: string;
+}
+
+export interface DirectorAcceptanceCard {
+  shotId: string;
+  cells: DirectorAcceptanceCell[];
+}
+
+export interface DirectorSessionState {
+  stage: string;
+  presetKey: string | null;
+  sourceText: string;
+  built: boolean;
+  queueACardIdx: number;
+  shotIdx: number;
+  quartetBatch: number;
+  shotsPassed: number;
+}
+
+export interface DirectorV5Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  provider?: string;
+  providerTier?: 'gemini' | 'pollinations' | 'deterministic';
+  usingServerKey?: boolean;
+  warning?: string | null;
+  cooldownSec?: number | null;
+  stepBadge?: string | null;
+  stage?: string;
+  options?: DirectorMenuOption[];
+  promptBlocks?: DirectorPromptBlock[];
+  acceptanceCard?: DirectorAcceptanceCard | null;
+  checksStamp?: string | null;
+  createdAt: number;
+}
+
+export interface DirectorV5Session {
+  id: string;
+  projectId: string;
+  title: string;
+  state: DirectorSessionState;
+  messages: DirectorV5Message[];
+  ledger: DirectorAssetLedgerItem[];
+  dispatchedJobs: Record<string, string>;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface Project {
   id: string;
@@ -68,6 +169,7 @@ export interface MediaShot {
   omniTurnAction?: 'edit' | 'extend';
   parentShotId?: string;
   hasSyncedAudio?: boolean;
+  directorMeta?: DirectorShotMeta;
   storyboardOrder: number | null;
   error?: string;
   createdAt: number;

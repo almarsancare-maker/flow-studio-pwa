@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
+  Clapperboard,
   Cpu,
   Download,
   FileText,
+  Film,
   FolderPlus,
   HardDrive,
   MoreVertical,
@@ -13,12 +15,14 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import type { EngineSettings, Project } from '../types/studio';
+import type { EngineSettings, Project, WorkspaceView } from '../types/studio';
 import type { ColabHealthStatus, ServerKeyCapabilities } from '../services/engine';
 
 interface TopBarProps {
   projects: Project[];
   activeProject: Project | null;
+  activeView: WorkspaceView;
+  onChangeView: (view: WorkspaceView) => void;
   onSelectProject: (id: string) => void;
   onCreateProject: (name: string) => void;
   engineSettings: EngineSettings;
@@ -38,6 +42,8 @@ interface TopBarProps {
 export function TopBar({
   projects,
   activeProject,
+  activeView,
+  onChangeView,
   onSelectProject,
   onCreateProject,
   engineSettings,
@@ -126,12 +132,12 @@ export function TopBar({
   return (
     <header
       data-testid="flow-top-bar"
-      className="flow-header sticky top-0 w-full shrink-0"
+      className="flow-header sticky top-0 w-full shrink-0 !h-auto md:!h-[80px]"
     >
       <nav
         data-testid="flow-main-nav"
         aria-label="Main navigation"
-        className="w-full h-full px-6 md:px-8 lg:px-10 flex items-center justify-between gap-4"
+        className="w-full h-[64px] md:h-full px-4 sm:px-6 md:px-8 lg:px-10 flex items-center justify-between gap-3 sm:gap-4"
       >
         {/* Left: Pure Flow Wordmark + Project Selector */}
         <div className="flex items-center gap-4 min-w-0 shrink-0">
@@ -216,14 +222,33 @@ export function TopBar({
         </div>
 
         {/* Center: Signature Flow Minimalist Navigation Links (Desktop) */}
-        <div className="hidden md:flex items-center justify-center gap-7 shrink-0">
+        <div className="hidden md:flex items-center justify-center gap-6 lg:gap-7 shrink-0">
           <button
             type="button"
-            data-active="true"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            data-testid="nav-studio-btn"
+            data-active={activeView === 'studio' ? 'true' : 'false'}
+            onClick={() => {
+              onChangeView('studio');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             className="flow-nav-link whitespace-nowrap cursor-pointer"
           >
             Studio
+          </button>
+          <button
+            type="button"
+            data-testid="nav-director-btn"
+            data-active={activeView === 'director' ? 'true' : 'false'}
+            onClick={() => {
+              onChangeView('director');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="flow-nav-link flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+          >
+            <span>Director</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#c2e7ff]/15 text-[#c2e7ff] border border-[#c2e7ff]/30 font-mono font-medium">
+              v5
+            </span>
           </button>
           <button
             type="button"
@@ -365,6 +390,38 @@ export function TopBar({
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
+                      onChangeView('studio');
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[13px] text-white/85 hover:bg-white/8 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Film className="w-4 h-4 stroke-[1.5] text-white/75" />
+                      Studio Canvas
+                    </span>
+                    {activeView === 'studio' && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onChangeView('director');
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[13px] text-white/85 hover:bg-white/8 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Clapperboard className="w-4 h-4 stroke-[1.5] text-[#c2e7ff]" />
+                      Director v5 Compiler
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#c2e7ff]/15 text-[#c2e7ff] font-mono">
+                      v5.0.3
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
                       onOpenBible();
                     }}
                     className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[13px] text-white/85 hover:bg-white/8 transition cursor-pointer"
@@ -438,6 +495,56 @@ export function TopBar({
           </div>
         </div>
       </nav>
+
+      {/* Mobile Primary View Strip (zero-overflow 1-tap Studio <-> Director v5 switch on phones) */}
+      <div
+        data-testid="mobile-view-strip"
+        className="md:hidden w-full px-4 pb-2.5 pt-0.5 bg-black/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between gap-2"
+      >
+        <div className="flow-pill-group grid grid-cols-2 p-1 gap-1 flex-1">
+          <button
+            type="button"
+            data-testid="mobile-nav-studio-btn"
+            onClick={() => onChangeView('studio')}
+            className={`py-1.5 px-3 rounded-[32px] text-[12.5px] font-medium transition cursor-pointer ${
+              activeView === 'studio'
+                ? 'bg-white text-[#121317]'
+                : 'text-white/70 hover:text-white'
+            }`}
+          >
+            Studio
+          </button>
+          <button
+            type="button"
+            data-testid="mobile-nav-director-btn"
+            onClick={() => onChangeView('director')}
+            className={`py-1.5 px-3 rounded-[32px] text-[12.5px] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeView === 'director'
+                ? 'bg-white text-[#121317]'
+                : 'text-white/70 hover:text-white'
+            }`}
+          >
+            <span>Director</span>
+            <span
+              className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                activeView === 'director'
+                  ? 'bg-[#121317]/15 text-[#121317]'
+                  : 'bg-[#c2e7ff]/15 text-[#c2e7ff]'
+              }`}
+            >
+              v5
+            </span>
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenBible}
+          className="flow-btn-glass px-3 py-1.5 text-[12px] font-medium shrink-0 flex items-center gap-1 cursor-pointer"
+        >
+          <span>Bible</span>
+          <span className="text-[10px] text-white/60">{bibleCount}</span>
+        </button>
+      </div>
     </header>
   );
 }
