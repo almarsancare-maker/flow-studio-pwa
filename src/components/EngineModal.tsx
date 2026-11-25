@@ -115,7 +115,10 @@ export function EngineModal({
       const result = await verifyHfToken(draft.hfToken);
       setHfStatus(result);
       if (result.valid) {
-        setDraft((prev) => ({ ...prev, activeEngine: 'free-24-7' }));
+        const next: EngineSettings = { ...draft, activeEngine: 'free-24-7', hfToken: draft.hfToken.trim() };
+        setDraftState(next);
+        dirtyRef.current = false;
+        await onSaveSettings(next);
       }
     } finally {
       setTestingHf(false);
@@ -128,7 +131,10 @@ export function EngineModal({
       const result = await pingColabBackend(draft.colabUrl);
       onHealthUpdate(result);
       if (result.online) {
-        setDraft((prev) => ({ ...prev, activeEngine: 'colab-t4' }));
+        const next: EngineSettings = { ...draft, activeEngine: 'colab-t4', colabUrl: draft.colabUrl.trim() };
+        setDraftState(next);
+        dirtyRef.current = false;
+        await onSaveSettings(next);
       }
     } finally {
       setTestingColab(false);
@@ -141,7 +147,10 @@ export function EngineModal({
       const result = await verifyGeminiOmniApiKey(draft.geminiApiKey);
       setOmniStatus(result);
       if (result.valid) {
-        setDraft((prev) => ({ ...prev, activeEngine: 'gemini-omni' }));
+        const next: EngineSettings = { ...draft, activeEngine: 'gemini-omni', geminiApiKey: draft.geminiApiKey.trim() };
+        setDraftState(next);
+        dirtyRef.current = false;
+        await onSaveSettings(next);
       }
     } finally {
       setTestingOmni(false);
@@ -154,7 +163,10 @@ export function EngineModal({
       const result = await verifySeedanceApiKey(draft.seedanceProvider, draft.seedanceApiKey);
       setSeedanceStatus(result);
       if (result.valid) {
-        setDraft((prev) => ({ ...prev, activeEngine: 'seedance-byok' }));
+        const next: EngineSettings = { ...draft, activeEngine: 'seedance-byok', seedanceApiKey: draft.seedanceApiKey.trim() };
+        setDraftState(next);
+        dirtyRef.current = false;
+        await onSaveSettings(next);
       }
     } finally {
       setTestingSeedance(false);
